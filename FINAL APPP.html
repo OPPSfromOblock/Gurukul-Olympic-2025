@@ -1,0 +1,4503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>#GO2025 — Scoring (With Auth & Roles)</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    /* Bright ESPN-style white/red palette */
+    --bg:#f3f4f6;
+    --bg-alt:#e5e7eb;
+    --card:#ffffff;
+    --card-alt:#f9fafb;
+    --text:#0f172a;
+    --accent:#c8102e; /* deep sports red */
+    --accent-2:#f97373; /* lighter action red */
+    --accent-soft:rgba(200,16,46,0.08);
+    --muted:#6b7280;
+    --glass:#ffffff;
+    --radius:12px;
+    --radius-lg:18px;
+    --border-subtle:rgba(15,23,42,0.08);
+    --shadow-soft:0 18px 40px rgba(15,23,42,0.06);
+
+    --neon-pink:#c8102e;
+    --neon-cyan:#f97373;
+    --neon-purple:#f97373;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{scroll-behavior:smooth}
+  body{
+    margin:0;
+    font-family:Inter,system-ui,Arial,sans-serif;
+    background:linear-gradient(180deg,#ffffff 0%,#f3f4f6 50%,#e5e7eb 100%);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    min-height:100vh;
+    display:flex;
+    align-items:stretch;
+    overflow-x:hidden;
+    overflow-y:auto;
+  }
+
+  body::before{
+    content:"";
+    position:fixed;
+    inset:-20%;
+    background:radial-gradient(circle at top,#fee2e2 0%,transparent 60%);
+    opacity:0.65;
+    pointer-events:none;
+    z-index:-1;
+  }
+
+  @keyframes spinGradient{
+    from{transform:rotate(0deg);} to{transform:rotate(360deg);}
+  }
+
+  /* Glitch intro overlay */
+  .glitch-intro-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(15,23,42,0.82);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:5000;
+    overflow:hidden;
+    backdrop-filter:blur(4px);
+  }
+  .glitch-intro-overlay::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(15,23,42,0.4) 0px,
+        rgba(15,23,42,0.4) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    mix-blend-mode:soft-light;
+    pointer-events:none;
+  }
+  .glitch-intro-inner{
+    position:relative;
+    text-align:center;
+    color:var(--text);
+    padding:18px 22px;
+    border-radius:16px;
+    background:rgba(255,255,255,0.96);
+    box-shadow:0 16px 36px rgba(15,23,42,0.28);
+    border:1px solid rgba(200,16,46,0.18);
+  }
+  .glitch-logo-wrapper{
+    margin-bottom:18px;
+  }
+  .glitch-logo-wrapper img{
+    max-width:180px;
+    width:48vw;
+    filter:none;
+  }
+  .glitch-text{
+    font-size:26px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    font-weight:900;
+    position:relative;
+    display:inline-block;
+    color:var(--accent);
+  }
+  .glitch-text span{
+    display:none; /* keep structure but hide extra glitch layers for a minimal look */
+  }
+  .glitch-subtitle{
+    margin-top:8px;
+    font-size:13px;
+    color:var(--muted);
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+  }
+  .glitch-scanline{
+    position:absolute;
+    left:10%;
+    right:10%;
+    height:20px;
+    background:linear-gradient(90deg,transparent,rgba(148,163,184,0.45),transparent);
+    opacity:0.55;
+    animation:glitch-scan 2.3s infinite linear;
+  }
+  @keyframes glitch-skew{
+    0%{ transform:skewX(0deg); }
+    20%{ transform:skewX(3deg); }
+    40%{ transform:skewX(-3deg); }
+    60%{ transform:skewX(1deg); }
+    80%{ transform:skewX(-1deg); }
+    100%{ transform:skewX(0deg); }
+  }
+  @keyframes glitch-shift-1{
+    0%,100%{ clip-path:inset(0 0 60% 0); }
+    50%{ clip-path:inset(40% 0 0 0); }
+  }
+  @keyframes glitch-shift-2{
+    0%,100%{ clip-path:inset(40% 0 0 0); }
+    50%{ clip-path:inset(0 0 60% 0); }
+  }
+  @keyframes glitch-scan{
+    0%{ top:-15%; }
+    100%{ top:120%; }
+  }
+
+  /* Layout */
+  .sidebar{
+    width:260px;
+    padding:20px 18px;
+    background:#ffffff !important;
+    border-right:1px solid rgba(229,231,235,1);
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    box-shadow:12px 0 30px rgba(15,23,42,0.08);
+    color:var(--text);
+  }
+
+  /* Dark mode overrides (sidebar + search bar + main UI) */
+  body.dark-mode{
+    background:#020617;
+    color:#f9fafb;
+  }
+  body.dark-mode::before{
+    content:"";
+    position:fixed;
+    inset:-20%;
+    background:radial-gradient(circle at top,#7f1d1d 0%,transparent 60%);
+    opacity:0.45;
+    pointer-events:none;
+    z-index:-1;
+  }
+
+  body.dark-mode .sidebar{
+    background:#020617 !important;
+    color:#f9fafb;
+    border-right:1px solid rgba(15,23,42,0.9);
+    box-shadow:12px 0 30px rgba(15,23,42,0.9);
+  }
+  body.dark-mode .sidebar .muted{
+    color:#9ca3af;
+  }
+  body.dark-mode .logo{
+    background:#020617;
+    color:#fecaca;
+    border-color:#ef4444;
+    box-shadow:0 8px 18px rgba(0,0,0,0.7);
+  }
+  body.dark-mode nav button{
+    color:#f9fafb;
+  }
+  body.dark-mode nav button:hover{
+    background:rgba(31,41,55,1);
+  }
+  body.dark-mode nav button.active{
+    background:linear-gradient(90deg,rgba(248,113,113,0.35),rgba(15,23,42,1));
+    color:#fecaca;
+  }
+
+  /* Cards / content */
+  body.dark-mode .card{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+    box-shadow:0 18px 40px rgba(0,0,0,0.7);
+    color:#f9fafb;
+  }
+  body.dark-mode .muted{
+    color:#d1d5db;
+  }
+
+  /* Headings */
+  body.dark-mode h1,
+  body.dark-mode h2,
+  body.dark-mode h3,
+  body.dark-mode h4{
+    color:#f9fafb;
+  }
+  body.dark-mode .quote-card{
+    background:#020617;
+    border-color:#ef4444;
+  }
+  body.dark-mode .stat-card{
+    background:linear-gradient(135deg,#020617,#111827);
+    border-color:rgba(31,41,55,1);
+  }
+
+  /* Buttons */
+  body.dark-mode .btn{
+    background:#111827;
+    color:#f9fafb;
+    border-color:rgba(55,65,81,1);
+  }
+  body.dark-mode .btn:hover{
+    background:#1f2937;
+    box-shadow:0 4px 10px rgba(0,0,0,0.8);
+  }
+  body.dark-mode .btn.primary{
+    color:#fef2f2;
+    box-shadow:0 8px 18px rgba(248,113,113,0.8);
+  }
+  body.dark-mode .btn.ghost{
+    background:transparent;
+    border:1px solid rgba(75,85,99,1);
+    color:#f9fafb;
+  }
+
+  /* Inputs, textareas & selects */
+  body.dark-mode input[type="text"],
+  body.dark-mode input[type="email"],
+  body.dark-mode input[type="search"],
+  body.dark-mode input[type="password"],
+  body.dark-mode textarea,
+  body.dark-mode select{
+    background:#020617;
+    color:#f9fafb;
+    border-color:rgba(55,65,81,1);
+  }
+  body.dark-mode input[type="text"]::placeholder,
+  body.dark-mode input[type="email"]::placeholder,
+  body.dark-mode input[type="search"]::placeholder,
+  body.dark-mode textarea::placeholder{
+    color:#9ca3af;
+  }
+  body.dark-mode input[type="text"]:focus,
+  body.dark-mode input[type="email"]:focus,
+  body.dark-mode input[type="search"]:focus,
+  body.dark-mode input[type="password"]:focus,
+  body.dark-mode textarea:focus,
+  body.dark-mode select:focus{
+    background:#020617;
+    box-shadow:0 0 0 1px rgba(248,113,113,0.7);
+  }
+  body.dark-mode .pwbox input,
+  body.dark-mode .pwbox textarea{
+    background:#020617;
+    color:#f9fafb;
+    border-color:rgba(55,65,81,1);
+  }
+
+  /* Matches / lists */
+  body.dark-mode .match-card{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+    box-shadow:0 10px 24px rgba(0,0,0,0.8);
+    color:#f9fafb;
+  }
+  body.dark-mode .match-card .muted{
+    color:#f9fafb;
+  }
+  body.dark-mode .match-card:hover{
+    background:#111827;
+  }
+
+  /* Score sheet & modals */
+  body.dark-mode #scoreSheet{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+    box-shadow:0 24px 80px rgba(0,0,0,0.9);
+  }
+  body.dark-mode .modal{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+    box-shadow:0 24px 70px rgba(0,0,0,0.9);
+  }
+  body.dark-mode .pwbox{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+    box-shadow:0 24px 70px rgba(0,0,0,0.9);
+  }
+
+  /* Logs / team blocks */
+  body.dark-mode .teamBlock{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+  }
+  body.dark-mode .log{
+    background:#020617;
+    border-color:rgba(31,41,55,1);
+    color:#e5e7eb;
+  }
+
+  /* Pagination buttons */
+  body.dark-mode .pagination button{
+    background:#020617;
+    border-color:rgba(55,65,81,1);
+    color:#e5e7eb;
+  }
+  body.dark-mode .pagination button:hover{
+    background:#111827;
+    color:#fef2f2;
+    box-shadow:0 4px 10px rgba(0,0,0,0.8);
+  }
+
+  /* Search bar (matches) */
+  body.dark-mode #searchMatches{
+    background:#020617;
+    color:#f9fafb;
+    border-color:rgba(55,65,81,1);
+  }
+  body.dark-mode #searchMatches::placeholder{
+    color:#9ca3af;
+  }
+
+  .hamburger-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border:0;
+    background:rgba(255,255,255,0.9);
+    font-size:22px;
+    cursor:pointer;
+    padding:6px 9px;
+    border-radius:999px;
+    box-shadow:0 4px 10px rgba(15,23,42,0.12);
+    transition:background 0.2s ease,transform 0.1s ease,box-shadow 0.2s ease;
+  }
+  .hamburger-btn:hover{background:#fff}
+  .hamburger-btn:active{transform:scale(0.96);box-shadow:0 2px 6px rgba(15,23,42,0.18)}
+  .hamburger-btn:focus{outline:2px solid rgba(0,0,0,0.4)}
+
+  /* Hide hamburger on desktop only */
+  @media (min-width:901px){
+    .hamburger-btn{display:none;}
+  }
+
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{
+    position:relative;
+    width:60px;height:60px;border-radius:12px;
+    background:#ffffff;
+    border:2px solid var(--accent);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--accent);
+    font-weight:900;letter-spacing:0.08em;
+    box-shadow:0 8px 18px rgba(15,23,42,0.4);
+    overflow:hidden;
+  }
+.logo img{
+    width:100%;
+    height:100%;
+    object-fit:contain; /* show full GO 2025 logo */
+    object-position:center center; /* center logo inside box */
+    display:block;
+  }
+  .logo-text{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    opacity:0;
+    pointer-events:none;
+    font-weight:900;
+    letter-spacing:0.08em;
+  }
+
+  @keyframes pulseGlow{
+    0%,100%{box-shadow:0 0 0 rgba(0,0,0,0);} 
+    50%{box-shadow:0 0 0 rgba(0,0,0,0);} 
+  }
+  .title{font-weight:900;font-size:16px}
+  nav{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  nav button{
+    background:transparent;
+    border:0;
+    padding:9px 10px;
+    border-radius:10px;
+    text-align:left;
+    cursor:pointer;
+    font-weight:700;
+    color:var(--text);
+    font-size:14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    transition:background 0.18s ease,color 0.18s ease,transform 0.08s ease;
+  }
+  nav button:hover{background:rgba(248,250,252,1)}
+  nav button.disabled{opacity:0.4;pointer-events:none}
+  nav button.active{
+    background:linear-gradient(90deg,var(--accent-soft),rgba(248,250,252,1));
+    color:var(--accent);
+    transform:translateX(1px);
+  }
+  .grow{flex:1}
+
+  .main{
+    flex:1;
+    padding:22px 24px 26px;
+    overflow:auto;
+    position:relative;
+  }
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header h1{
+    margin:0;
+    font-size:20px;
+    color:var(--accent);
+    font-weight:900;
+    letter-spacing:0.02em;
+    transform-origin:left center;
+    transition:transform 0.28s cubic-bezier(0.22,0.61,0.36,1), opacity 0.28s ease;
+  }
+  body.tab-changed header h1{
+    transform:translateY(-4px) scale(0.9);
+    opacity:0.9;
+  }
+
+  /* Animated tab content like iOS page transitions */
+  .tab{
+    opacity:0;
+    transform:translateY(12px);
+    transition:opacity 0.25s ease,transform 0.25s ease;
+    pointer-events:none;
+    display:none;
+  }
+  .tab.tab-active{
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+    display:block;
+  }
+  .tab.tab-hidden{
+    opacity:0;
+    pointer-events:none;
+    display:none;
+  }
+
+  .card{
+    background:var(--card);
+    border-radius:var(--radius-lg);
+    padding:18px 20px;
+    border:1px solid var(--border-subtle);
+    box-shadow:var(--shadow-soft);
+  }
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:10px;align-items:center}
+
+  /* Make inner flex rows wrap nicely on mobile */
+  .card>div{display:flex;align-items:center;gap:8px}
+
+  /* Home hero */
+  .home-hero{
+    display:flex;
+    gap:26px;
+    align-items:stretch;
+  }
+  .home-hero-left{
+    flex:1.4;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .home-hero-right{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    justify-content:space-between;
+  }
+
+  /* Home bottom symbol (U-track + red ball) + logo strip */
+  .home-symbol-wrapper{
+    margin-top:32px;
+    display:flex;
+    justify-content:flex-start; /* move to the left side */
+    align-items:center;
+    gap:28px;
+    pointer-events:none;
+  }
+  .home-symbol{
+    position:relative;
+    width:72px;
+    height:180px;
+  }
+  .home-symbol-track{
+    position:absolute;
+    inset:0;
+    border-radius:0 0 40px 40px; /* straight at top, curved only at bottom */
+    border:10px solid var(--accent); /* red outer line */
+    border-top:0; /* no top stroke */
+    box-shadow:0 10px 24px rgba(15,23,42,0.45);
+    background:transparent;
+  }
+  .home-symbol-ball{
+    position:absolute;
+    left:50%;
+    bottom:56px;           /* move further up toward the center */
+    width:32px;            /* smaller red dot */
+    height:32px;
+    margin-left:-16px;     /* keep centred horizontally */
+    border-radius:999px;
+    background:#c8102e;
+    box-shadow:0 10px 20px rgba(15,23,42,0.45);
+  }
+  .home-symbol-divider{
+    width:1px;
+    height:160px;
+    background:linear-gradient(180deg,rgba(148,163,184,0),rgba(148,163,184,0.9),rgba(148,163,184,0));
+    opacity:0.9;
+  }
+  .home-symbol-logo{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .home-symbol-logo img{
+    height:160px;
+    width:auto;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+    filter:none;
+    mix-blend-mode:normal;
+    animation:none;
+  }
+  @keyframes neonPulse{
+    0%,100%{
+      filter:brightness(1) saturate(1);
+      box-shadow:
+        0 0 10px rgba(236,72,153,0.6),
+        0 0 22px rgba(59,130,246,0.5),
+        0 0 32px rgba(45,212,191,0.45);
+    }
+    50%{
+      filter:brightness(1.08) saturate(1.12);
+      box-shadow:
+        0 0 18px rgba(236,72,153,1),
+        0 0 36px rgba(59,130,246,0.9),
+        0 0 52px rgba(45,212,191,0.8);
+    }
+  }
+
+  @media (max-width:900px){
+    .home-symbol-wrapper{
+      justify-content:center;
+      align-items:flex-end;
+      gap:18px;
+    }
+    .home-symbol-logo img{
+      height:120px;
+    }
+    .home-symbol-divider{
+      height:120px;
+    }
+  }
+
+  /* Home footer text block */
+  .home-footer{
+    margin-top:32px;
+    margin-bottom:24px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    text-align:center;
+    font-size:13px;
+  }
+  .home-footer-line{
+    color:var(--muted);
+  }
+  .home-footer-link{
+    color:var(--accent);
+    text-decoration:none;
+    font-weight:600;
+  }
+  .home-footer-link:hover{
+    text-decoration:underline;
+  }
+
+  /* About tab layout & animation */
+  .about-card{
+    display:flex;
+    flex-direction:row;
+    gap:24px;
+    align-items:stretch;
+    animation:aboutFadeIn 420ms ease-out;
+  }
+  .about-left{
+    flex:1.4;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .about-right{
+    flex:1;
+    display:flex;
+    align-items:stretch;
+    justify-content:flex-end;
+  }
+  .about-title{
+    font-size:22px;
+    font-weight:900;
+    line-height:1.2;
+  }
+  .about-body{
+    font-size:14px;
+    line-height:1.6;
+    color:var(--muted);
+    max-width:520px;
+  }
+  .about-grid{
+    margin-top:8px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:10px;
+  }
+  .about-highlight{
+    padding:10px 12px;
+    border-radius:14px;
+    background:linear-gradient(135deg,#ffffff,#fef2f2);
+    border:1px solid rgba(229,231,235,1);
+    box-shadow:0 8px 20px rgba(15,23,42,0.06);
+  }
+  .about-highlight-label{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.12em;
+    color:var(--accent);
+    margin-bottom:4px;
+  }
+  .about-highlight-text{
+    font-size:13px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+  .about-contact{
+    width:100%;
+    max-width:260px;
+    padding:12px 14px;
+    border-radius:14px;
+    border:1px solid rgba(229,231,235,1);
+    background:var(--card-alt);
+    box-shadow:0 8px 24px rgba(15,23,42,0.05);
+    text-align:center;
+    margin:0 auto;
+  }
+  .about-contact-label{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.12em;
+    color:var(--accent);
+    margin-bottom:4px;
+  }
+  .about-contact-text{
+    font-size:13px;
+    line-height:1.6;
+    color:var(--muted);
+    margin-top:6px;
+  }
+  .about-contact-text a{
+    font-size:14px;
+    font-weight:600;
+    color:var(--accent);
+  }
+  @keyframes aboutFadeIn{
+    0%{opacity:0;transform:translateY(16px);filter:blur(6px);}
+    100%{opacity:1;transform:translateY(0);filter:blur(0);}
+  }
+
+  @media (max-width:900px){
+    .about-card{
+      flex-direction:column;
+    }
+  }
+
+  /* Footer appearing animation (2s) when Home tab is shown */
+  #homeFooter.home-footer-animate .home-footer-line,
+  #homeFooter.home-footer-animate .home-footer-link{
+    animation:homeFooterFade 2s ease-out forwards;
+  }
+  @keyframes homeFooterFade{
+    0%{
+      opacity:0;
+      transform:translateY(40px);
+      filter:blur(6px);
+    }
+    100%{
+      opacity:1;
+      transform:translateY(0);
+      filter:blur(0);
+    }
+  }
+
+  /* Entry animation: slide up from below screen over ~4.23s when home tab becomes active */
+  #homeSymbol.home-symbol-animate .home-symbol{
+    animation:homeSymbolFade 4.23s cubic-bezier(0.22,0.7,0.25,1) forwards;
+  }
+  #homeSymbol.home-symbol-animate .home-symbol-logo img{
+    animation:homeSymbolFade 4.23s cubic-bezier(0.22,0.7,0.25,1) forwards;
+  }
+  @keyframes homeSymbolFade{
+    0%{
+      opacity:0;
+      transform:translateY(120px);
+      filter:blur(10px);
+    }
+    40%{
+      opacity:0.8;
+      transform:translateY(20px);
+      filter:blur(3px);
+    }
+    70%{
+      opacity:1;
+      transform:translateY(-4px);
+      filter:blur(1px);
+    }
+    100%{
+      opacity:1;
+      transform:translateY(0);
+      filter:blur(0);
+    }
+  }
+  .pill-tag{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 12px;
+    border-radius:999px;
+    background:rgba(248,250,252,0.95);
+    border:1px solid rgba(226,232,240,1);
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+  }
+  .pill-dot{
+    width:8px;height:8px;border-radius:999px;
+    background:var(--accent);
+  }
+  .home-title{
+    font-size:28px;
+    line-height:1.2;
+    font-weight:900;
+  }
+  .gradient-text{
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    background-size:140% 140%;
+    -webkit-background-clip:text;
+    color:transparent;
+    animation:shineText 8s ease-in-out infinite;
+  }
+  @keyframes shineText{
+    0%,100%{background-position:0% 50%;}
+    50%{background-position:100% 50%;}
+  }
+  .home-subtitle{
+    font-size:14px;
+    color:var(--muted);
+    max-width:480px;
+  }
+  .home-stats{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:6px;
+  }
+  .stat-card{
+    flex:1;
+    min-width:130px;
+    padding:10px 12px;
+    border-radius:14px;
+    background:linear-gradient(135deg,#ffffff,#fef2f2);
+    border:1px solid rgba(229,231,235,1);
+    box-shadow:0 8px 24px rgba(15,23,42,0.08);
+    position:relative;
+    overflow:hidden;
+    transition:transform 0.22s ease,box-shadow 0.22s ease,background 0.22s ease;
+    cursor:default;
+  }
+  .stat-card::before{
+    content:"";
+    position:absolute;
+    inset:auto;
+  }
+  .stat-card:hover{
+    transform:translateY(-6px) scale(1.02);
+    box-shadow:0 18px 40px rgba(15,23,42,0.18);
+  }
+  .stat-value{
+    font-size:22px;
+    font-weight:900;
+    letter-spacing:0.05em;
+  }
+  .stat-label{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.14em;
+    color:var(--muted);
+  }
+  .quote-card{
+    padding:14px 16px;
+    border-radius:18px;
+    background:#ffffff;
+    border:2px solid var(--accent);
+    box-shadow:0 18px 40px rgba(15,23,42,0.12);
+    position:relative;
+    overflow:hidden;
+    color:var(--text);
+    transition:transform 0.22s ease,box-shadow 0.22s ease;
+  }
+  .quote-card:hover{
+    transform:translateY(-6px);
+    box-shadow:0 22px 48px rgba(15,23,42,0.2);
+  }
+  .quote-card::after{
+    content:"";
+    position:absolute;
+    inset:auto;
+  }
+  .quote-label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.15em;
+    color:var(--accent);
+  }
+  .quote-text{
+    margin-top:6px;
+    font-size:20px;
+    font-weight:900;
+    line-height:1.3;
+    color:var(--accent);
+  }
+  .home-hero-left .home-title{
+    transition:transform 0.22s ease, text-shadow 0.22s ease;
+  }
+  .home-hero-left:hover .home-title{
+    transform:translateY(-4px);
+    text-shadow:0 6px 18px rgba(15,23,42,0.25);
+  }
+  .home-hero-right .quote-card:hover .quote-text{
+    transform:translateY(-2px);
+  }
+
+  .orbit-wrapper{
+    position:relative;
+    width:140px;
+    height:140px;
+    margin-top:8px;
+  }
+  .orbit-ring{
+    position:absolute;
+    inset:22px;
+    border-radius:50%;
+    border:1px dashed rgba(148,163,184,0.6);
+  }
+  .orbit-dot{
+    position:absolute;
+    top:50%;
+    left:50%;
+    width:10px;
+    height:10px;
+    border-radius:999px;
+    background:var(--accent);
+    /* center the dot on the middle of the ring */
+    margin-top:-5px;
+    margin-left:-5px;
+    transform-origin:50% 50%;
+    animation:orbit 6s cubic-bezier(0.4,0,0.2,1) infinite;
+  }
+  /* Rotate around the ring radius using rotate+translateY so path is a perfect circle */
+  @keyframes orbit{
+    0%   { transform:rotate(-90deg) translateY(-48px); }
+    25%  { transform:rotate(0deg)   translateY(-48px); }
+    50%  { transform:rotate(90deg)  translateY(-48px); }
+    75%  { transform:rotate(180deg) translateY(-48px); }
+    100% { transform:rotate(270deg) translateY(-48px); }
+  }
+
+  /* Form & controls */
+  .form-row{display:flex;gap:8px;margin-bottom:10px}
+  .form-row label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input[type="text"], input[type="email"], select{
+    width:100%;
+    padding:10px 11px;
+    border-radius:10px;
+    border:1px solid var(--border-subtle);
+    font-size:14px;
+    background:#fdfdfd;
+    transition:border-color 0.18s ease,box-shadow 0.18s ease,background 0.18s ease;
+  }
+  input[type="text"]:focus, input[type="email"]:focus, select:focus{
+    outline:none;
+    border-color:var(--accent);
+    box-shadow:0 0 0 1px rgba(200,16,46,0.35);
+    background:#ffffff;
+  }
+
+  .btn{
+    padding:10px 13px;
+    border-radius:999px;
+    border:1px solid transparent;
+    background:#e5e7eb;
+    cursor:pointer;
+    font-weight:800;
+    font-size:13px;
+    letter-spacing:0.02em;
+    transition:background 0.18s ease,transform 0.08s ease,box-shadow 0.18s ease,color 0.18s ease,border-color 0.18s ease;
+    white-space:nowrap;
+    color:var(--text);
+  }
+  .btn:hover{background:#d1d5db;box-shadow:0 4px 10px rgba(15,23,42,0.18);}
+  .btn:active{transform:scale(0.97);box-shadow:none}
+  .btn.primary{
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    background-size:140% 140%;
+    color:#f9fafb;
+    border-color:transparent;
+    box-shadow:0 8px 18px rgba(248,113,113,0.5);
+    animation:none;
+  }
+  .btn.primary:hover{box-shadow:0 10px 24px rgba(248,113,113,0.8);filter:brightness(1.03);}
+  .btn.ghost{background:#ffffff;border:1px solid rgba(148,163,184,0.6);color:var(--muted);}
+  .btn.danger{background:linear-gradient(120deg,#b91c1c,#ef4444);color:#fee2e2;box-shadow:0 6px 16px rgba(248,113,113,0.7);}
+  .btn[disabled]{opacity:0.45;cursor:not-allowed;box-shadow:none}
+  .match-filter-active{
+    background:radial-gradient(circle at top,rgba(248,113,113,0.28),rgba(15,23,42,0.98));
+    color:#fee2e2;
+    box-shadow:0 0 0 1px rgba(248,113,113,0.9);
+  }
+
+  /* Start scoring modal */
+  .modal{
+    position:fixed;
+    left:50%;top:50%;transform:translate(-50%,-50%);
+    width:520px;
+    max-width:96vw;
+    max-height:90vh;
+    background:#ffffff;
+    border-radius:18px;
+    padding:18px 18px 16px;
+    border:1px solid rgba(209,213,219,1);
+    box-shadow:0 24px 70px rgba(15,23,42,0.25);
+    display:none;
+    z-index:2000;
+    overflow-y:auto;
+    color:var(--text);
+  }
+  .modal.show{display:block}
+  .modal h3{margin:0 0 12px 0;color:var(--accent)}
+
+  /* Matches list */
+  .match-card{
+    display:flex;
+    justify-content:space-between;
+    align-items:stretch;
+    gap:12px;
+    padding:12px 13px;
+    border-radius:12px;
+    border:1px solid rgba(229,231,235,1);
+    margin-bottom:10px;
+    background:#ffffff;
+    box-shadow:0 4px 12px rgba(15,23,42,0.06);
+    transition:transform 0.12s ease,box-shadow 0.12s ease,background 0.15s ease;
+    color:var(--text);
+  }
+  .match-card > div:first-child{
+    flex:1;
+    min-width:0;
+  }
+  .match-card > div:last-child{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:6px;
+    min-width:120px;
+  }
+  .match-card > div:last-child .badge{
+    align-self:flex-end;
+  }
+  .match-card > div:last-child .btn{
+    display:block;
+    width:120px;
+    text-align:center;
+  }
+  .match-card:hover{
+    transform:translateY(-1px);
+    box-shadow:0 10px 22px rgba(15,23,42,0.12);
+    background:#fef2f2;
+  }
+
+  /* Desktop layout for match cards: equal size + hover grow */
+  @media (min-width: 900px){
+    #scSchedule .match-card,
+    #matchesList .match-card,
+    #liveList .match-card{
+      width:100%;
+      min-height:96px;
+    }
+    #scSchedule,
+    #matchesList,
+    #liveList{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .match-card:hover{
+      transform:translateY(-4px) scale(1.02);
+    }
+  }
+
+  .badge{padding:6px 10px;border-radius:999px;font-weight:900;font-size:11px}
+  .live{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;}
+  .done{background:linear-gradient(90deg,#16a34a,#4ade80);color:#ecfdf5;}
+  .scheduled{background:#e5e7eb;color:var(--muted);border:1px solid rgba(209,213,219,1);}
+  .wrong{background:#f97316;color:#fff;border:1px solid #ea580c;}
+  .winner{color:#2ecc71;font-weight:800}
+  .loser{color:#e74c3c;font-weight:800}
+  .tie{color:#f1c40f;font-weight:900}
+
+  /* Scoring panel */
+  #scoreSheet{
+    display:none;
+    position:fixed;
+    inset:8% 8% auto 8%;
+    z-index:1500;
+    background:#ffffff;
+    border-radius:20px;
+    padding:18px 20px;
+    border:1px solid rgba(209,213,219,1);
+    box-shadow:0 24px 80px rgba(15,23,42,0.25);
+    width:84%;
+    max-width:1100px;
+    max-height:84vh;
+    overflow-y:auto;
+    color:var(--text);
+  }
+  #scoreSheet.show{display:block}
+  #scoreHead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .scoreCenter{font-size:40px;font-weight:900;color:var(--accent)}
+  .score-status-time{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:4px 10px;
+    border-radius:8px;
+    background:#2563eb;
+    color:#f9fafb;
+    font-weight:800;
+    letter-spacing:0.04em;
+    font-size:12px;
+  }
+  .score-status-time #timeLabel{
+    font-variant-numeric:tabular-nums;
+  }
+  body.dark-mode .score-status-time{
+    background:#1d4ed8;
+  }
+  .scoreControls{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .teamBlock{
+    flex:1;
+    padding:12px;
+    border-radius:12px;
+    border:1px solid rgba(229,231,235,1);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    align-items:center;
+    background:#f9fafb;
+  }
+
+  /* Event log */
+  .log{
+    max-height:220px;
+    overflow:auto;
+    background:#f3f4f6;
+    padding:8px;
+    border-radius:10px;
+    font-size:13px;
+    border:1px solid rgba(209,213,219,1);
+    color:var(--muted);
+  }
+
+  .pagination{
+    display:flex;
+    justify-content:center;
+    gap:6px;
+    font-size:13px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .pagination button{
+    min-width:28px;
+    padding:6px 8px;
+    border-radius:999px;
+    border:1px solid rgba(209,213,219,1);
+    background:#ffffff;
+    cursor:pointer;
+    font-weight:700;
+    font-size:12px;
+    color:var(--muted);
+    transition:background 0.15s ease,transform 0.08s ease,box-shadow 0.15s ease;
+  }
+  .pagination button:hover{background:#fef2f2;box-shadow:0 4px 10px rgba(15,23,42,0.12);color:var(--accent);}
+  .pagination button:active{transform:scale(0.96)}
+  .pagination button.active{
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    color:#fff;
+  }
+  .pagination button[disabled]{opacity:0.4;cursor:not-allowed}
+
+  /* Auth overlay */
+  .overlay{
+    position:fixed;inset:0;
+    background:rgba(15,23,42,0.55);
+    display:none;align-items:center;justify-content:center;z-index:3000;
+    backdrop-filter: blur(4px);
+  }
+  .pwbox{
+    background:#ffffff;
+    padding:20px 18px;
+    border-radius:18px;
+    width:420px;
+    border:1px solid rgba(209,213,219,1);
+    text-align:left;
+    box-shadow:0 24px 70px rgba(15,23,42,0.25);
+    color:var(--text);
+  }
+
+  /* Make walkthrough overlay fit nicely on all screens */
+  #walkthroughOverlay .pwbox{
+    width:92vw;
+    max-width:480px;
+    max-height:80vh;
+    overflow-y:auto;
+  }
+  .pwbox h2{color:var(--accent);margin-bottom:8px}
+  .pwbox input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(209,213,219,1);margin-top:6px;background:#f9fafb;color:var(--text);}
+  .small-muted{font-size:13px;color:var(--muted)}
+
+  /* Responsive */
+  @media (max-width:900px){
+    body{flex-direction:column}
+
+    .sidebar{
+      position:fixed;
+      z-index:4000;
+      left:0;top:0;bottom:0;
+      background:#ffffff !important;
+      width:260px;
+      box-shadow:16px 0 40px rgba(15,23,42,0.12);
+      transform:translateX(-100%);
+      transition:transform 0.32s cubic-bezier(0.25,0.9,0.35,1.2),box-shadow 0.28s ease;
+      will-change:transform;
+      display:flex;
+    }
+    .sidebar.mobile-open{transform:translateX(0)}
+
+    /* iOS-style slide + dim/scale for main content */
+    .main{
+      transition:transform 0.28s cubic-bezier(0.25,0.9,0.35,1.2), filter 0.28s ease, opacity 0.28s ease;
+    }
+    .mobile-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,0.35);
+      opacity:0;
+      pointer-events:none;
+      transition:opacity 0.28s ease;
+      z-index:3500;
+    }
+    body.sidebar-open .mobile-backdrop{
+      opacity:1;
+      pointer-events:auto;
+    }
+    body.sidebar-open .main{
+      transform:translateX(8px) scale(0.98);
+      filter:blur(1px);
+      opacity:0.96;
+    }
+
+    .main{padding:16px 14px 20px}
+    header h1{font-size:18px}
+
+    .card{padding:14px 14px;border-radius:14px}
+    .card>div{flex-wrap:wrap;align-items:flex-start}
+
+    /* Center match lists & ensure one card per row on mobile */
+    #scSchedule,
+    #matchesList,
+    #liveList{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      align-items:center;
+    }
+
+    #scSchedule .match-card,
+    #matchesList .match-card,
+    #liveList .match-card{
+      width:100%;
+      max-width:480px;
+    }
+
+    #scoreSheet{
+      inset:0;
+      width:100%;
+      max-width:none;
+      border-radius:0;
+      max-height:100vh;
+    }
+
+    .modal{
+      inset:12px;
+      width:auto;
+      max-width:none;
+      left:12px;right:12px;top:12px;bottom:12px;
+      transform:none;
+      border-radius:14px;
+    }
+  }
+
+  @media (max-width:600px){
+    header{align-items:flex-start;flex-direction:column;gap:6px}
+    .badge{font-size:10px;padding-inline:8px}
+    .scoreCenter{font-size:32px}
+    .teamBlock{padding:10px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Glitch intro shown after login -->
+<div id="glitchIntro" class="glitch-intro-overlay">
+  <div class="glitch-intro-inner">
+    <div class="glitch-logo-wrapper">
+      <img src="final.png" alt="GO 2025" />
+    </div>
+    <div class="glitch-text" aria-label="Welcome to Gurukul Olympics">
+      Welcome to Gurukul Olympics
+      <span>Welcome to Gurukul Olympics</span>
+      <span>Welcome to Gurukul Olympics</span>
+    </div>
+    <div class="glitch-subtitle">#GO2025 • Official Scoring</div>
+    <div class="glitch-scanline"></div>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="brand">
+    <div class="logo">
+      <img src="final.png" />
+      <span class="logo-text">GO</span>
+    </div>
+    <div>
+      <div class="title">GO 2025</div>
+      <div class="muted" style="font-size:13px">Gurukul Olympics</div>
+    </div>
+  </div>
+
+  <nav aria-label="main-nav">
+    <button data-tab="home" class="active">Home</button>
+    <button data-tab="sports">Sports</button>
+    <button data-tab="scoring">Scoring</button>
+    <button data-tab="matches">Matches</button>
+    <button data-tab="live">Live</button>
+    <button data-tab="about">About</button>
+    <button data-tab="users">Users</button>
+    <div class="grow"></div>
+
+    <div id="authArea">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">You are:</div>
+      <div id="signedOut" style="display:block">
+        <button id="btnShowAuth" class="btn primary">Sign in / Register</button>
+      </div>
+      <div id="signedIn" style="display:none">
+        <div id="userName" style="font-weight:800"></div>
+        <div class="muted" id="userEmail" style="font-size:13px"></div>
+        <div style="height:8px"></div>
+        <button id="btnSignOut" class="btn ghost">Sign out</button>
+      </div>
+    </div>
+
+    <!-- Dark mode toggle -->
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(229,231,235,1);font-size:13px;color:var(--muted);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span>Dark mode</span>
+        <button id="toggleDarkMode" class="btn" style="padding:6px 10px;font-size:12px;">Off</button>
+      </div>
+    </div>
+
+</nav>
+</div>
+
+<div id="mobileNavBackdrop" class="mobile-backdrop"></div>
+
+<div class="main">
+  <header>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="hamburgerBtn" class="hamburger-btn" aria-label="Toggle navigation">☰</button>
+      <h1>#GO2025 — Scoring</h1>
+    </div>
+  </header>
+
+  <div style="height:14px"></div>
+
+  <section id="home" class="card tab tab-active">
+    <div class="home-hero">
+      <div class="home-hero-left">
+        <div class="pill-tag">
+          <span class="pill-dot"></span>
+          Gurukul Olympics 2025 • Live Scoring
+        </div>
+        <h2 class="home-title">
+          Realtime scoring,<br/>
+          <span class="gradient-text"></span>
+        </h2>
+        <p class="home-subtitle">
+          Track every point from the arena with a fast, tournament-ready scoring system for Gurukul Olympics 2025.
+        </p>
+
+        <div class="home-stats">
+          <div class="stat-card floating">
+            <div class="stat-value gradient-text">153</div>
+            <div class="stat-label">Registered schools</div>
+          </div>
+          <div class="stat-card floating" style="animation-delay:0.4s">
+            <div class="stat-value gradient-text">14,000+</div>
+            <div class="stat-label">Participants</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-hero-right">
+        <div class="quote-card">
+          <div class="quote-label">Gurukul motto</div>
+          <div class="quote-text gradient-text">
+            “Khelo Gurukul mein, jeeto duniya mein”
+          </div>
+        </div>
+        <div class="orbit-wrapper">
+          <div class="orbit-ring"></div>
+          <div class="orbit-dot"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom strip: left U-shaped track with red ball, center divider, right logo with neon glow -->
+  <div id="homeSymbol" class="home-symbol-wrapper">
+    <div class="home-symbol">
+      <div class="home-symbol-track"></div>
+      <div class="home-symbol-ball"></div>
+    </div>
+    <div class="home-symbol-divider"></div>
+    <div class="home-symbol-logo">
+      <img src="final.png" alt="GO 2025" />
+    </div>
+  </div>
+
+  <section id="sports" class="tab tab-hidden">
+    <div class="card">
+      <h2>All Sports</h2>
+      <p class="muted">Select a sport while starting scoring.</p>
+      <div id="sportsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="scoring" class="tab tab-hidden">
+    <div class="card">
+      <h2>Scoring Hub</h2>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+        <button id="btnStartScoring" class="btn primary">Start Scoring</button>
+        <div style="flex:1"></div>
+        <div class="muted">Matches are persisted to Realtime DB and broadcast live.</div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--muted)">Sport</label>
+        <select id="filterSportScoring" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All</option></select>
+        <label style="font-size:13px;color:var(--muted)">Age</label>
+        <select id="filterAgeScoring" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All</option></select>
+        <label style="font-size:13px;color:var(--muted)">Date</label>
+        <select id="filterDayScoring" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All dates</option></select>
+        <label style="font-size:13px;color:var(--muted)">Time</label>
+        <select id="filterTimeScoring" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+          <option value="latest">Latest → Oldest</option>
+          <option value="oldest">Oldest → Latest</option>
+        </select>
+        <div style="flex:1;min-width:80px"></div>
+        <input id="searchScoring" placeholder="Search team, sport..." style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);min-width:180px"/>
+      </div>
+
+      <div id="scSchedule" style="margin-top:14px"></div>
+      <div id="scScoringPagination" class="pagination" style="margin-top:16px;display:none"></div>
+    </div>
+  </section>
+
+  <section id="matches" class="tab tab-hidden">
+    <div class="card">
+      <h2>Matches</h2>
+      <!-- Row 1: type filters (All / Live / Finished / Wrong) -->
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <button id="filterAll" class="btn ghost">All</button>
+        <button id="filterLive" class="btn">Live</button>
+        <button id="filterFinished" class="btn">Finished</button>
+        <button id="filterWrong" class="btn">Wrong</button>
+      </div>
+
+      <!-- Row 2: sport / age / date / time / search -->
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--muted)">Sport</label>
+        <select id="filterSportMatches" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All</option></select>
+        <label style="font-size:13px;color:var(--muted)">Age</label>
+        <select id="filterAgeMatches" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All</option></select>
+        <label style="font-size:13px;color:var(--muted)">Date</label>
+        <select id="filterDayMatches" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All dates</option></select>
+        <label style="font-size:13px;color:var(--muted)">Time</label>
+        <select id="filterTimeMatches" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+          <option value="latest">Latest → Oldest</option>
+          <option value="oldest">Oldest → Latest</option>
+        </select>
+
+        <div style="flex:1;min-width:80px"></div>
+        <input id="searchMatches" placeholder="Search team, sport..." style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);min-width:180px"/>
+      </div>
+      <div id="matchesList" style="margin-top:12px"></div>
+      <div id="matchesPagination" class="pagination" style="margin-top:16px;display:none"></div>
+    </div>
+  </section>
+
+  <section id="live" class="tab tab-hidden">
+    <div class="card">
+      <h2>Live Matches</h2>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--muted)">Sport</label>
+        <select id="filterSportLive" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All</option></select>
+        <label style="font-size:13px;color:var(--muted)">Age</label>
+        <select id="filterAgeLive" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All</option></select>
+        <label style="font-size:13px;color:var(--muted)">Date</label>
+        <select id="filterDayLive" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"><option value="all">All dates</option></select>
+        <label style="font-size:13px;color:var(--muted)">Time</label>
+        <select id="filterTimeLive" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+          <option value="latest">Latest → Oldest</option>
+          <option value="oldest">Oldest → Latest</option>
+        </select>
+      </div>
+      <div id="liveList" style="margin-top:12px"></div>
+      <div id="livePagination" class="pagination" style="margin-top:16px;display:none"></div>
+    </div>
+  </section>
+
+  <section id="users" class="tab tab-hidden">
+    <div class="card">
+      <h2>Users</h2>
+      <div id="usersAdminArea" style="margin-top:8px"></div>
+
+      <!-- Subview selector: Pending / Whitelisted / All -->
+      <div style="margin-top:8px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:13px;">
+        <span class="muted">View:</span>
+        <select id="usersViewSelect" style="padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+          <option value="all">All (pending + whitelisted)</option>
+          <option value="pending">Pending only</option>
+          <option value="whitelist">Whitelisted only</option>
+        </select>
+      </div>
+
+      <div id="pendingSection">
+        <h3 style="margin-top:8px">Pending Users</h3>
+        <div id="pendingList" style="margin-bottom:12px"></div>
+      </div>
+
+      <div id="whitelistSection">
+        <h3>Whitelisted Users</h3>
+        <div id="whitelistControls" style="margin:4px 0 6px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;">
+          <input id="whitelistSearch" placeholder="Search by name or email" style="flex:1;min-width:200px;padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" />
+          <select id="whitelistRoleFilter" style="padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+            <option value="all">All roles</option>
+            <option value="user">user</option>
+            <option value="teacher">teacher</option>
+            <option value="admin">admin</option>
+          </select>
+          <select id="whitelistValidityFilter" style="padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+            <option value="all">All emails</option>
+            <option value="valid">Valid only</option>
+            <option value="invalid">Invalid only</option>
+          </select>
+          <select id="whitelistSort" style="padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+            <option value="name">Sort by name</option>
+            <option value="email">Sort by email</option>
+            <option value="role">Sort by role</option>
+          </select>
+        </div>
+        <div id="whitelistList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" class="tab tab-hidden">
+    <div class="card about-card">
+      <div class="about-left">
+        <div class="pill-tag" style="margin-bottom:8px">
+          <span class="pill-dot"></span>
+          About #GO2025 — Official Scoring
+        </div>
+        <h2 class="about-title">Scoring built for Gurukul Olympics.</h2>
+        <p class="about-body">
+          This web app is designed to keep every match at Gurukul Olympics 2025 in sync — from
+          the field, to the scorer&apos;s table, to the live board. It is optimized for fast entry,
+          clear results, and safe access for teachers and admins.
+        </p>
+        <div class="about-grid">
+          <div class="about-highlight">
+            <div class="about-highlight-label">Live scoring</div>
+            <div class="about-highlight-text">Updates go straight to Realtime DB so spectators and teams see scores instantly.</div>
+          </div>
+          <div class="about-highlight">
+            <div class="about-highlight-label">Safe access</div>
+            <div class="about-highlight-text">Teachers and admins sign in with approved emails; wrong or test matches can be marked separately.</div>
+          </div>
+        </div>
+      </div>
+      <div class="about-right">
+        <div class="about-contact">
+          <div class="about-contact-label">Need help?</div>
+          <p class="about-contact-text">
+            If you face any problems or have questions, please contact:<br/>
+            <a href="mailto:researchinnovation003@gmail.com">researchinnovation003@gmail.com</a>
+          </p>
+          <p class="about-contact-text">
+            For information about Gurukul and the event, visit:<br/>
+            <a href="https://gurukul.org" target="_blank" rel="noopener noreferrer">gurukul.org</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="homeFooter" class="home-footer">
+    <div class="home-footer-line">Made for GO-2025</div>
+    <a href="mailto:researchinnovation003@gmail.com" class="home-footer-link">
+      Queries &amp; support: researchinnovation003@gmail.com
+    </a>
+    <a href="https://gurukul.org" target="_blank" rel="noopener noreferrer" class="home-footer-link">
+      About us: gurukul.org
+    </a>
+  </div>
+</div>
+
+<div id="startModal" class="modal" role="dialog" aria-modal="true">
+  <h3>Start Scoring</h3>
+
+  <div style="display:flex;gap:10px">
+    <div style="flex:1">
+      <label>Sport</label>
+      <select id="mSport"></select>
+    </div>
+    <div style="width:12px"></div>
+    <div style="flex:1">
+      <label>Age Category</label>
+      <select id="mAge"></select>
+    </div>
+  </div>
+
+  <div style="height:10px"></div>
+
+  <div class="form-row">
+    <div style="flex:1">
+      <label>Team A (School)</label>
+      <input id="mTeamA" type="text" placeholder="Team A name" />
+    </div>
+    <div style="width:10px"></div>
+    <div style="flex:1">
+      <label>Team B (School)</label>
+      <input id="mTeamB" type="text" placeholder="Team B name" />
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <div style="display:flex;justify-content:flex-end;gap:8px">
+    <button id="startCancel" class="btn ghost">Cancel</button>
+    <button id="startCreate" class="btn primary">Create & Start</button>
+  </div>
+</div>
+
+  <div id="scoreSheet" aria-hidden="true">
+  <div id="scoreHead">
+    <div>
+      <div id="sheetTitle" style="font-weight:900;font-size:18px;color:var(--accent)"></div>
+      <div id="sheetMeta" class="muted" style="font-size:13px"></div>
+      <div id="refereeLine" class="muted" style="font-size:13px;margin-top:2px"></div>
+      <div id="winnerLoserHeader" style="margin-top:4px;font-size:13px"></div>
+    </div>
+    <div>
+      <button id="closeScore" class="btn ghost">Close</button>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <div style="display:flex;gap:12px">
+    <div class="teamBlock">
+      <div id="teamAName" style="font-weight:900"></div>
+      <div id="teamASchool" class="muted" style="font-size:13px"></div>
+      <div style="height:8px"></div>
+      <div style="font-size:32px;font-weight:900" id="teamAScore">0</div>
+      <div class="scoreControls" id="teamAControls">
+        </div>
+    </div>
+
+    <div style="width:24px;display:flex;align-items:center;justify-content:center">
+      <div class="scoreCenter" id="scoreCenter">-</div>
+    </div>
+
+    <div class="teamBlock">
+      <div id="teamBName" style="font-weight:900"></div>
+      <div id="teamBSchool" class="muted" style="font-size:13px"></div>
+      <div style="height:8px"></div>
+      <div style="font-size:32px;font-weight:900" id="teamBScore">0</div>
+      <div class="scoreControls" id="teamBControls">
+        </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+    <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button id="saveProgress" class="btn">Save</button>
+      <button id="finishMatch" class="btn danger">Finish Match</button>
+      <button id="resetMatch" class="btn ghost">Reset</button>
+      <!-- Walkouts & byes scenarios -->
+      <label for="walkOutcomeSelect" style="font-size:12px;color:var(--muted);margin-left:4px;">Walkouts &amp; byes</label>
+      <select id="walkOutcomeSelect" style="padding:6px 8px;border-radius:8px;border:1px solid rgba(209,213,219,1);font-size:12px;min-width:180px;">
+        <option value="">Select outcome…</option>
+        <option value="A_no_show">Team A didn&apos;t show up (Team B wins)</option>
+        <option value="B_no_show">Team B didn&apos;t show up (Team A wins)</option>
+        <option value="both_walkout">Both teams walkout (tied)</option>
+        <option value="bye_A">Bye for Team A (Team A wins)</option>
+        <option value="bye_B">Bye for Team B (Team B wins)</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:13px;min-width:220px">
+      <div class="score-status-time">
+        <span id="statusLabel">LIVE</span>
+        &nbsp;•&nbsp;
+        <span id="timeLabel">00:00</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <span class="muted" style="font-size:12px">Timer</span>
+        <select id="matchDuration" style="padding:4px 6px;border-radius:8px;border:1px solid rgba(209,213,219,1);font-size:12px">
+          <option value="0">Manual</option>
+          <option value="600">10 min</option>
+          <option value="900">15 min</option>
+          <option value="1200">20 min</option>
+          <option value="1800">30 min</option>
+        </select>
+        <input id="matchDurationManual" type="number" min="0" placeholder="mins" style="width:64px;padding:4px 6px;border-radius:8px;border:1px solid rgba(209,213,219,1);font-size:12px;display:none" />
+        <button id="timerStart" class="btn" style="padding:4px 10px;font-size:12px;">Start</button>
+        <button id="timerPause" class="btn" style="padding:4px 10px;font-size:12px;">Pause</button>
+        <button id="timerReset" class="btn ghost" style="padding:4px 10px;font-size:12px;">Reset</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <span class="muted" style="font-size:12px">Quarter</span>
+        <select id="quarterSelect" style="padding:4px 6px;border-radius:8px;border:1px solid rgba(209,213,219,1);font-size:12px">
+          <option value="1">Q1</option>
+          <option value="2">Q2</option>
+          <option value="3">Q3</option>
+          <option value="4">Q4</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- Volleyball: per-set summary & Next Set control -->
+  <div id="volleyballSetsArea" style="display:none;margin-bottom:8px">
+    <h4 style="margin:6px 0">Sets</h4>
+    <div id="volleyballSetsList" class="log" style="max-height:120px"></div>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+      <div class="muted" id="currentSetLabel">Current set: 1</div>
+      <button id="btnNextSet" class="btn">Next Set</button>
+    </div>
+  </div>
+
+  <div class="event-log-section" style="margin-top:4px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <h4 style="margin:6px 0">Event Log</h4>
+      <button id="toggleEventLog" class="btn ghost" style="padding:4px 10px;font-size:12px;">Show events</button>
+    </div>
+    <div id="eventLogWrapper" style="margin-top:6px;display:none;">
+      <div id="eventLog" class="log"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Match info overlay -->
+<div class="overlay" id="matchInfoOverlay" style="display:none">
+  <div class="pwbox card" style="text-align:left;max-width:520px">
+    <h2 id="matchInfoTitle" style="margin-bottom:8px;color:var(--accent)">Match details</h2>
+    <div id="matchInfoMeta" class="muted" style="font-size:13px;margin-bottom:10px"></div>
+    <div id="matchInfoContent" style="font-size:14px;line-height:1.5"></div>
+    <div style="height:12px"></div>
+    <div style="text-align:right"><button id="matchInfoClose" class="btn ghost">Close</button></div>
+  </div>
+</div>
+
+<!-- First-time walkthrough overlay -->
+<div class="overlay" id="walkthroughOverlay" style="display:none">
+  <div class="pwbox card" style="text-align:left;">
+    <h2 id="walkTitle" style="margin-bottom:8px;color:var(--accent)">Jay Swaminarayan</h2>
+    <div id="walkBody" style="font-size:14px;line-height:1.5"></div>
+    <div style="height:12px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button id="walkSkip" class="btn ghost">Skip</button>
+      <button id="walkNext" class="btn primary">Next</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="authOverlay" style="display:none">
+  <div class="pwbox card" style="text-align:left;max-width:420px">
+    <img alt="logo" src="" style="height:48px;margin-bottom:8px"/>
+    <h2 id="authTitle">Welcome — Sign In / Register</h2>
+
+    <div style="display:flex;gap:8px;margin-bottom:8px" id="authTabs">
+      <button id="tabRegister" class="btn primary" style="flex:1">Register</button>
+      <button id="tabLogin" class="btn" style="flex:1">Login</button>
+    </div>
+
+    <div id="registerForm">
+      <label>Email</label>
+      <input autocomplete="email" id="regEmail" placeholder="you@school.edu" type="email"/>
+      <label style="margin-top:8px">Confirm Email</label>
+      <input autocomplete="off" id="regEmailConfirm" placeholder="confirm email" type="email"/>
+      <div style="height:8px"></div>
+      <button id="regBtn" class="btn primary" style="width:100%">Register (request access)</button>
+      <div id="regMsg" style="margin-top:8px;color:#8f8;display:none"></div>
+      <div style="height:8px"></div>
+      <button id="regGoogleBtn" class="btn" style="width:100%;background:#eee;color:#111;font-weight:700;margin-top:6px">
+        <span style="margin-right:8px">🔵</span> Sign in with Google
+      </button>
+    </div>
+
+    <div id="loginForm" style="display:none">
+      <label>Email</label>
+      <input autocomplete="email" id="loginEmail" placeholder="your registered email" type="email"/>
+      <div style="height:8px"></div>
+      <button id="loginBtn" class="btn primary" style="width:100%">Send Sign-in Link</button>
+      <div id="loginMsg" style="margin-top:8px;color:#8f8;display:none"></div>
+      <div style="height:8px"></div>
+      <button id="loginGoogleBtn" class="btn primary" style="width:100%;margin-top:6px;background:#4285F4;color:#fff;font-weight:900">
+        Sign in with Google
+      </button>
+
+      <div style="margin-top:10px">
+        <label style="font-size:13px;color:var(--muted)">Upgrade / Bypass code (optional)</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input id="upgradeCode" placeholder="Enter code (admins only)" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"/>
+          <button id="codeAccessBtn" class="btn primary">Enter Code</button>
+        </div>
+        <div id="codeAccessMsg" class="small-muted" style="display:none;margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div id="authNote" style="margin-top:10px;color:var(--muted);font-size:13px">
+      We use Firebase passwordless email sign-in (magic link). Register to request access — admins approve registered users.
+    </div>
+    <div style="height:8px"></div>
+    <div style="text-align:right"><button id="authClose" class="btn ghost">Close</button></div>
+  </div>
+</div>
+
+<!-- Generic confirm overlay -->
+<div class="overlay" id="confirmOverlay" style="display:none">
+  <div class="pwbox card" style="text-align:left;max-width:420px">
+    <h2 style="margin-bottom:8px;color:var(--accent)">Please confirm</h2>
+    <div id="confirmMessage" style="font-size:14px;line-height:1.5;margin-bottom:12px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button id="confirmCancel" class="btn ghost">Cancel</button>
+      <button id="confirmOk" class="btn primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Firebase config - KEEP your own project's values here
+   ========================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDfiPPYg1bnHlwMj3ctjsY5o9RM8LWB-4s",
+  authDomain: "go2025-new.firebaseapp.com",
+  projectId: "go2025-new",
+  storageBucket: "go2025-new.firebasestorage.app",
+  messagingSenderId: "527350736849",
+  appId: "1:527350736849:web:12fb093267f66f71a962f0",
+  measurementId: "G-D18JX8N3ET"
+  // add databaseURL if needed
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const rtdb = firebase.database(); // original scoring functions depend on RTDB
+const db = firebase.firestore();  // used for whitelist/pending/registeredUsers
+
+/* =========================
+   Constants & state
+   ========================= */
+const UPGRADE_ADMIN_CODE = 'NeverThinkGurukul35'; // temporary bypass code for admin sessions (change/remove in production)
+const actionCodeSettings = {
+  url: window.location.href,
+  handleCodeInApp: true,
+};
+
+let localSessionRole = null; // used when bypass code grants session role
+
+/* =========================
+   DOM refs
+   ========================= */
+const btnShowAuth = document.getElementById('btnShowAuth');
+const authOverlay = document.getElementById('authOverlay');
+const authClose = document.getElementById('authClose');
+
+// Glitch intro overlay
+const glitchIntro = document.getElementById('glitchIntro');
+
+// Generic confirm overlay elements
+const confirmOverlay = document.getElementById('confirmOverlay');
+const confirmMessageEl = document.getElementById('confirmMessage');
+const confirmOkBtn = document.getElementById('confirmOk');
+const confirmCancelBtn = document.getElementById('confirmCancel');
+let confirmResolveFn = null;
+
+// Match info overlay elements
+const matchInfoOverlay = document.getElementById('matchInfoOverlay');
+const matchInfoTitle = document.getElementById('matchInfoTitle');
+const matchInfoMeta = document.getElementById('matchInfoMeta');
+const matchInfoContent = document.getElementById('matchInfoContent');
+const matchInfoClose = document.getElementById('matchInfoClose');
+
+// Walkthrough overlay elements
+const walkthroughOverlay = document.getElementById('walkthroughOverlay');
+const walkTitle = document.getElementById('walkTitle');
+const walkBody = document.getElementById('walkBody');
+const walkNext = document.getElementById('walkNext');
+const walkSkip = document.getElementById('walkSkip');
+
+const tabRegister = document.getElementById('tabRegister');
+const tabLogin = document.getElementById('tabLogin');
+
+const registerForm = document.getElementById('registerForm');
+const loginForm = document.getElementById('loginForm');
+
+const regEmail = document.getElementById('regEmail');
+const regEmailConfirm = document.getElementById('regEmailConfirm');
+const regBtn = document.getElementById('regBtn');
+const regMsg = document.getElementById('regMsg');
+
+const loginEmail = document.getElementById('loginEmail');
+const loginBtn = document.getElementById('loginBtn');
+const loginMsg = document.getElementById('loginMsg');
+
+const regGoogleBtn = document.getElementById('regGoogleBtn');
+const loginGoogleBtn = document.getElementById('loginGoogleBtn');
+
+const upgradeCodeInput = document.getElementById('upgradeCode');
+const codeAccessBtn = document.getElementById('codeAccessBtn');
+const codeAccessMsg = document.getElementById('codeAccessMsg');
+
+const signedOutArea = document.getElementById('signedOut');
+const signedInArea = document.getElementById('signedIn');
+const btnSignOut = document.getElementById('btnSignOut');
+const userNameEl = document.getElementById('userName');
+const userEmailEl = document.getElementById('userEmail');
+
+const navButtons = document.querySelectorAll('nav button[data-tab], nav button');
+const sidebarEl = document.querySelector('.sidebar');
+const hamburgerBtn = document.getElementById('hamburgerBtn');
+const toggleDarkModeBtn = document.getElementById('toggleDarkMode');
+const mobileNavBackdrop = document.getElementById('mobileNavBackdrop');
+
+function setMobileSidebarOpen(isOpen){
+  if(!sidebarEl) return;
+  if(isOpen){
+    sidebarEl.classList.add('mobile-open');
+    document.body.classList.add('sidebar-open');
+  } else {
+    sidebarEl.classList.remove('mobile-open');
+    document.body.classList.remove('sidebar-open');
+  }
+}
+
+if(hamburgerBtn && sidebarEl){
+  hamburgerBtn.addEventListener('click', ()=>{
+    const willOpen = !sidebarEl.classList.contains('mobile-open');
+    setMobileSidebarOpen(willOpen);
+  });
+
+  // Close mobile sidebar when clicking outside it
+  document.addEventListener('click', (e)=>{
+    if(window.innerWidth > 900) return; // desktop: ignore
+    if(!sidebarEl.classList.contains('mobile-open')) return;
+    const target = e.target;
+    if(sidebarEl.contains(target) || hamburgerBtn.contains(target)) return;
+    setMobileSidebarOpen(false);
+  });
+
+  if(mobileNavBackdrop){
+    mobileNavBackdrop.addEventListener('click', ()=> setMobileSidebarOpen(false));
+  }
+}
+
+// Simple dark mode toggle (sidebar + search bar)
+function setDarkMode(isDark){
+  if(isDark){
+    document.body.classList.add('dark-mode');
+    if(toggleDarkModeBtn) toggleDarkModeBtn.textContent = 'On';
+  } else {
+    document.body.classList.remove('dark-mode');
+    if(toggleDarkModeBtn) toggleDarkModeBtn.textContent = 'Off';
+  }
+}
+
+(function initDarkMode(){
+  const saved = (localStorage.getItem('go_darkMode') === '1');
+  setDarkMode(saved);
+  if(toggleDarkModeBtn){
+    toggleDarkModeBtn.addEventListener('click', ()=>{
+      const current = document.body.classList.contains('dark-mode');
+      const next = !current;
+      setDarkMode(next);
+      localStorage.setItem('go_darkMode', next ? '1' : '0');
+    });
+  }
+})();
+
+const usersTabBtn = document.querySelector('nav button[data-tab="users"]');
+const pendingList = document.getElementById('pendingList');
+const whitelistList = document.getElementById('whitelistList');
+const usersAdminArea = document.getElementById('usersAdminArea');
+const usersViewSelect = document.getElementById('usersViewSelect');
+const pendingSection = document.getElementById('pendingSection');
+const whitelistSection = document.getElementById('whitelistSection');
+
+// Whitelist filter/sort controls
+const whitelistSearchInput = document.getElementById('whitelistSearch');
+const whitelistRoleFilterSelect = document.getElementById('whitelistRoleFilter');
+const whitelistSortSelect = document.getElementById('whitelistSort');
+const whitelistValidityFilterSelect = document.getElementById('whitelistValidityFilter');
+let whitelistSearchText = '';
+let whitelistRoleFilterValue = 'all';
+let whitelistValidityFilterValue = 'all';
+let whitelistSortBy = 'name';
+
+/* =========================
+   Utility helpers
+   ========================= */
+function encodeEmailKey(email){ return encodeURIComponent((email||'').toLowerCase()); }
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Custom confirm overlay returning a Promise<boolean>
+function showConfirm(message){
+  return new Promise(resolve=>{
+    if(!confirmOverlay || !confirmMessageEl || !confirmOkBtn || !confirmCancelBtn){
+      // Fallback to native confirm if overlay elements missing
+      resolve(window.confirm(message));
+      return;
+    }
+    // If another confirm is open, resolve it as false first
+    if(confirmResolveFn){
+      confirmResolveFn(false);
+      confirmResolveFn = null;
+    }
+    confirmResolveFn = (val)=>{
+      confirmOverlay.style.display = 'none';
+      confirmResolveFn = null;
+      resolve(val);
+    };
+    confirmMessageEl.textContent = message;
+    confirmOverlay.style.display = 'flex';
+  });
+}
+
+if(confirmOkBtn && confirmCancelBtn && confirmOverlay){
+  confirmOkBtn.addEventListener('click', ()=>{ if(confirmResolveFn) confirmResolveFn(true); });
+  confirmCancelBtn.addEventListener('click', ()=>{ if(confirmResolveFn) confirmResolveFn(false); });
+  // Close on backdrop click
+  confirmOverlay.addEventListener('click', (e)=>{
+    if(e.target === confirmOverlay && confirmResolveFn) confirmResolveFn(false);
+  });
+  // Close on Escape key
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape' && confirmResolveFn){ confirmResolveFn(false); }
+  });
+}
+
+// Get an IST (Asia/Kolkata) date key like 2025-11-18 for filtering by date
+function getISTDateKeyFromMs(ms){
+  try{
+    const d = new Date(ms || Date.now());
+    const fmt = new Intl.DateTimeFormat('en-CA',{
+      timeZone:'Asia/Kolkata',
+      year:'numeric',month:'2-digit',day:'2-digit'
+    });
+    return fmt.format(d); // YYYY-MM-DD
+  }catch(e){
+    return '';
+  }
+}
+
+// Pretty IST date label (e.g. 18 Nov 2025)
+function getISTDateLabel(ms){
+  try{
+    const d = new Date(ms || Date.now());
+    const fmt = new Intl.DateTimeFormat('en-IN',{
+      timeZone:'Asia/Kolkata',
+      day:'2-digit',month:'short',year:'numeric'
+    });
+    return fmt.format(d);
+  }catch(e){ return ''; }
+}
+
+// Pretty IST time label (e.g. 09:15 PM)
+function getISTTimeLabel(ms){
+  try{
+    const d = new Date(ms || Date.now());
+    const fmt = new Intl.DateTimeFormat('en-IN',{
+      timeZone:'Asia/Kolkata',
+      hour:'2-digit',minute:'2-digit',hour12:true
+    });
+    return fmt.format(d);
+  }catch(e){ return ''; }
+}
+
+// Walkthrough helpers (per email)
+function walkthroughKeyFor(email){
+  return 'go_walkthrough_' + encodeEmailKey(email || '');
+}
+function hasSeenWalkthrough(email){
+  try{
+    return localStorage.getItem(walkthroughKeyFor(email)) === '1';
+  }catch(e){ return false; }
+}
+function markWalkthroughSeen(email){
+  try{
+    localStorage.setItem(walkthroughKeyFor(email), '1');
+  }catch(e){}
+}
+
+let walkthroughStep = 0;
+function startWalkthrough(){
+  if(!walkthroughOverlay || !walkTitle || !walkBody || !walkNext) return;
+  walkthroughStep = 0;
+  updateWalkthroughStep();
+  walkthroughOverlay.style.display = 'flex';
+}
+function updateWalkthroughStep(){
+  if(!walkthroughOverlay || !walkTitle || !walkBody || !walkNext) return;
+  if(walkthroughStep === 0){
+    walkTitle.textContent = 'Jay Swaminarayan';
+    walkBody.innerHTML = 'Welcome to Gurukul Olympics 2025!<br/><br/>' +
+      'I will guide you through the official scoring app of <strong>#GO2025#</strong>. Let\'s start.';
+    walkNext.textContent = 'Next';
+  } else if(walkthroughStep === 1){
+    walkTitle.textContent = 'App overview';
+    walkBody.innerHTML = 'Use the sidebar tabs to explore:<br/>' +
+      '<strong>Home</strong> – summary and intro.<br/>' +
+      '<strong>Sports</strong> – list of all events.<br/>' +
+      '<strong>Scoring</strong> – create and update live matches.<br/>' +
+      '<strong>Matches</strong> – browse all results.<br/>' +
+      '<strong>Live</strong> – see ongoing matches.<br/>' +
+      '<strong>Users</strong> – admin-only user management.';
+    walkNext.textContent = 'Next';
+  } else if(walkthroughStep === 2){
+    walkTitle.textContent = 'Need help?';
+    walkBody.innerHTML = 'If you face any problems or have questions, please contact:<br/>' +
+      '<a href="mailto:researchinnovation003@gmail.com">researchinnovation003@gmail.com</a>.';
+    walkNext.textContent = 'Finish';
+  } else {
+    walkthroughOverlay.style.display = 'none';
+  }
+}
+
+if(walkNext){
+  walkNext.addEventListener('click', ()=>{
+    walkthroughStep += 1;
+    updateWalkthroughStep();
+  });
+}
+if(walkSkip){
+  walkSkip.addEventListener('click', ()=>{
+    walkthroughOverlay.style.display = 'none';
+  });
+}
+
+function maybeShowWalkthrough(email){
+  if(!email) return;
+  if(hasSeenWalkthrough(email)) return;
+  startWalkthrough();
+  markWalkthroughSeen(email);
+}
+
+// Users view selector (Pending / Whitelisted / All)
+if(usersViewSelect && pendingSection && whitelistSection){
+  usersViewSelect.addEventListener('change', ()=>{
+    const v = usersViewSelect.value || 'all';
+    if(v === 'pending'){
+      pendingSection.style.display = 'block';
+      whitelistSection.style.display = 'none';
+    } else if(v === 'whitelist'){
+      pendingSection.style.display = 'none';
+      whitelistSection.style.display = 'block';
+    } else {
+      pendingSection.style.display = 'block';
+      whitelistSection.style.display = 'block';
+    }
+  });
+}
+
+// Wire whitelist filter/sort controls
+if(whitelistSearchInput){
+  whitelistSearchInput.addEventListener('input', ()=>{
+    whitelistSearchText = whitelistSearchInput.value || '';
+    refreshUsersLists();
+  });
+}
+if(whitelistRoleFilterSelect){
+  whitelistRoleFilterSelect.addEventListener('change', ()=>{
+    whitelistRoleFilterValue = whitelistRoleFilterSelect.value || 'all';
+    refreshUsersLists();
+  });
+}
+if(whitelistValidityFilterSelect){
+  whitelistValidityFilterSelect.addEventListener('change', ()=>{
+    whitelistValidityFilterValue = whitelistValidityFilterSelect.value || 'all';
+    refreshUsersLists();
+  });
+}
+if(whitelistSortSelect){
+  whitelistSortSelect.addEventListener('change', ()=>{
+    whitelistSortBy = whitelistSortSelect.value || 'name';
+    refreshUsersLists();
+  });
+}
+
+/* =========================
+   Whitelist / Pending helpers (Firestore)
+   registeredUsers collection: doc id = encodeURIComponent(email)
+   pendingUsers collection: doc id = encodeURIComponent(email)
+*/
+function isValidWhitelistEmail(email){
+  if(!email) return false;
+  const e = email.toString().trim().toLowerCase();
+  // Basic pattern: something@something.tld
+  const basic = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+  if(!basic) return false;
+  // Allow common TLDs like .com, .org, .net, .edu, .gov, .info, .io, .in, etc.
+  const allowedTlds = ['.com','.org','.net','.edu','.gov','.info','.io','.in'];
+  return allowedTlds.some(tld => e.endsWith(tld));
+}
+
+async function isWhitelisted(email){
+  if(!email) return false;
+  const doc = await db.collection('registeredUsers').doc(encodeEmailKey(email)).get();
+  return doc.exists;
+}
+async function addToPending(email){
+  if(!email) return;
+  await db.collection('pendingUsers').doc(encodeEmailKey(email)).set({
+    email: email,
+    requestedAt: new Date().toISOString()
+  });
+}
+async function loadUsersTab(){
+  // Admin-only area: show quick add
+  usersAdminArea.innerHTML = '';
+  const curRole = getSessionRole();
+  if(curRole === 'admin'){
+    const row = document.createElement('div');
+    row.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px">
+        <!-- Single email quick add -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="whitelistEmailInput" placeholder="Enter one email to whitelist" style="flex:1;min-width:220px;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)"/>
+          <select id="whitelistRoleSelect" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);min-width:120px">
+            <option value="user">user</option>
+            <option value="teacher">teacher</option>
+            <option value="admin">admin</option>
+          </select>
+          <button id="addWhitelistBtn" class="btn primary">Add</button>
+        </div>
+
+        <!-- Bulk add multiple emails with same role -->
+        <div style="margin-top:6px;font-size:13px;font-weight:600;color:#374151;">
+          Bulk management
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+          <textarea id="bulkWhitelistEmails" placeholder="Paste multiple emails (comma, space, or new line separated)" style="flex:2;min-width:260px;min-height:80px;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);"></textarea>
+          <div style="flex:1;min-width:180px;display:flex;flex-direction:column;gap:6px">
+            <select id="bulkWhitelistRoleSelect" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+              <option value="user">user</option>
+              <option value="teacher">teacher</option>
+              <option value="admin">admin</option>
+            </select>
+            <button id="addBulkWhitelistBtn" class="btn primary">Add bulk</button>
+          </div>
+        </div>
+      </div>
+      <div id="addWhitelistMsg" style="margin-top:4px;font-size:13px"></div>
+    `;
+    usersAdminArea.appendChild(row);
+
+    // Single email add
+    document.getElementById('addWhitelistBtn').addEventListener('click', async ()=>{
+      const em = (document.getElementById('whitelistEmailInput').value||'').trim().toLowerCase();
+      const role = document.getElementById('whitelistRoleSelect').value || 'user';
+      const m = document.getElementById('addWhitelistMsg');
+      m.innerText = '';
+      if(!em){ m.innerText = 'Enter email'; return; }
+      try{
+        await db.collection('registeredUsers').doc(encodeEmailKey(em)).set({
+          email: em,
+          role: role,
+          createdAt: new Date().toISOString(),
+          manualWhitelistBy: (getSessionEmail()||'system')
+        }, { merge:true });
+        m.innerText = `Whitelisted ${em} as ${role}.`;
+        document.getElementById('whitelistEmailInput').value='';
+        await refreshUsersLists();
+      }catch(e){ m.innerText = 'Failed. See console.'; console.error(e); }
+    });
+
+    // Bulk add multiple emails with same role
+    const bulkBtn = document.getElementById('addBulkWhitelistBtn');
+    if(bulkBtn){
+      bulkBtn.addEventListener('click', async ()=>{
+        const raw = (document.getElementById('bulkWhitelistEmails').value||'');
+        const role = document.getElementById('bulkWhitelistRoleSelect').value || 'user';
+        const m = document.getElementById('addWhitelistMsg');
+        m.innerText = '';
+
+        const parts = raw.split(/[\n,;\s]+/).map(x=>x.trim().toLowerCase()).filter(x=>x.includes('@'));
+        const uniqueEmails = Array.from(new Set(parts));
+        if(uniqueEmails.length === 0){
+          m.innerText = 'Enter at least one valid email.';
+          return;
+        }
+
+        try{
+          const batch = db.batch();
+          const nowIso = new Date().toISOString();
+          const by = getSessionEmail() || 'system';
+          uniqueEmails.forEach(em=>{
+            const ref = db.collection('registeredUsers').doc(encodeEmailKey(em));
+            batch.set(ref, {
+              email: em,
+              role: role,
+              createdAt: nowIso,
+              manualWhitelistBy: by
+            }, { merge:true });
+          });
+          await batch.commit();
+          m.innerText = `Whitelisted ${uniqueEmails.length} email(s) as ${role}.`;
+          document.getElementById('bulkWhitelistEmails').value='';
+          await refreshUsersLists();
+        }catch(e){
+          console.error(e);
+          m.innerText = 'Bulk whitelist failed. See console.';
+        }
+      });
+    }
+  }
+
+  pendingList.innerHTML = 'Loading...'; whitelistList.innerHTML = 'Loading...';
+  await refreshUsersLists();
+}
+
+// Ensure admin sees user lists + admin/bulk UI whenever opening the Users tab
+if(usersTabBtn){
+  usersTabBtn.addEventListener('click', async ()=>{
+    try{
+      const role = getSessionRole && getSessionRole();
+      if(role === 'admin'){
+        await loadUsersTab();
+      }
+    }catch(e){ console.error('Failed to load users tab', e); }
+  });
+}
+async function refreshUsersLists(){
+  const pSnap = await db.collection('pendingUsers').get();
+  const wSnap = await db.collection('registeredUsers').get();
+  if(pSnap.empty) pendingList.innerHTML = '<div class="muted">No pending users</div>';
+  else pendingList.innerHTML = pSnap.docs.map(d=>{
+    const em = escapeHtml(d.data().email||d.id);
+    const idSafe = d.id;
+    return `<div style="margin:6px 0;padding:8px;background:#f8f8f8;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="font-weight:800">${em}</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+        <span class="muted">Role:</span>
+        <select id="pendingRole-${idSafe}" style="padding:4px 6px;border-radius:6px;border:1px solid rgba(0,0,0,0.06);font-size:12px">
+          <option value="user">user</option>
+          <option value="teacher">teacher</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div style=\"display:flex;gap:8px\">
+        <button class=\"btn primary\" onclick=\"approveUser('${idSafe}')\">Approve</button>
+        <button class=\"btn danger\" onclick=\"rejectUser('${idSafe}')\">Reject</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(wSnap.empty) {
+    whitelistList.innerHTML = '<div class="muted">No whitelisted users</div>';
+  } else {
+    // Build array for filtering/sorting
+    let users = wSnap.docs.map(d=>{
+      const data = d.data();
+      const emailRaw = (data.email || d.id || '').toString();
+      const displayNameRaw = (data.displayName || emailRaw || '').toString();
+      const displayName = displayNameRaw.split('@')[0] || displayNameRaw || emailRaw;
+      const roleRaw = (data.role || 'user').toString();
+      const isValid = isValidWhitelistEmail(emailRaw);
+      return {
+        id: d.id,
+        emailRaw,
+        displayName,
+        roleRaw,
+        isValid
+      };
+    });
+
+    // Apply role filter
+    if(whitelistRoleFilterValue && whitelistRoleFilterValue !== 'all'){
+      users = users.filter(u => u.roleRaw === whitelistRoleFilterValue);
+    }
+
+    // Apply validity filter
+    if(whitelistValidityFilterValue === 'valid'){
+      users = users.filter(u => u.isValid);
+    } else if(whitelistValidityFilterValue === 'invalid'){
+      users = users.filter(u => !u.isValid);
+    }
+
+    // Apply search filter (name or email)
+    const q = (whitelistSearchText || '').trim().toLowerCase();
+    if(q){
+      users = users.filter(u => (
+        (u.displayName || '').toLowerCase().includes(q) ||
+        (u.emailRaw || '').toLowerCase().includes(q)
+      ));
+    }
+
+    // Apply sort
+    users.sort((a,b)=>{
+      const by = whitelistSortBy || 'name';
+      if(by === 'email'){
+        return a.emailRaw.localeCompare(b.emailRaw) || a.displayName.localeCompare(b.displayName);
+      } else if(by === 'role'){
+        return a.roleRaw.localeCompare(b.roleRaw) || a.emailRaw.localeCompare(b.emailRaw);
+      } else { // name
+        return a.displayName.localeCompare(b.displayName) || a.emailRaw.localeCompare(b.emailRaw);
+      }
+    });
+
+    const rows = users.map(u=>{
+      const em = escapeHtml(u.emailRaw);
+      const displayNameEsc = escapeHtml(u.displayName);
+      const roleRaw = u.roleRaw;
+      const idSafe = u.id;
+      const emailStyle = u.isValid
+        ? 'padding:8px 6px;'
+        : 'padding:8px 6px;color:#b91c1c;font-weight:600;';
+      const emailLabel = u.isValid ? '' : ' <span style="font-size:11px;color:#b91c1c;">(invalid syntax)</span>';
+      return `<tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px 6px;font-weight:600;white-space:nowrap;">${displayNameEsc}</td>
+        <td style="${emailStyle}">${em}${emailLabel}</td>
+        <td style="padding:8px 6px;">
+          <select id="wlRole-${idSafe}" style="padding:4px 6px;border-radius:6px;border:1px solid rgba(0,0,0,0.06);font-size:12px">
+            <option value="user" ${roleRaw==='user'?'selected':''}>user</option>
+            <option value="teacher" ${roleRaw==='teacher'?'selected':''}>teacher</option>
+            <option value="admin" ${roleRaw==='admin'?'selected':''}>admin</option>
+          </select>
+        </td>
+        <td style="padding:8px 6px;white-space:nowrap;">
+          <button class="btn" style="padding:4px 10px;font-size:12px;margin-right:4px" onclick="updateWhitelistRole('${idSafe}')">Update</button>
+          <button class="btn danger" style="padding:4px 10px;font-size:12px" onclick="removeWhitelist('${idSafe}')">Remove</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    whitelistList.innerHTML = `
+      <div style="margin-top:10px;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
+          <thead>
+            <tr style="background:#f9fafb;">
+              <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #e5e7eb;font-weight:600;">Name</th>
+              <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #e5e7eb;font-weight:600;">Email</th>
+              <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #e5e7eb;font-weight:600;">Role</th>
+              <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #e5e7eb;font-weight:600;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>`;
+  }
+}
+
+window.approveUser = async function(id){
+  try{
+    const doc = await db.collection('pendingUsers').doc(id).get();
+    if(!doc.exists) { alert('Not found'); return; }
+    const email = doc.data().email;
+    const roleSelect = document.getElementById(`pendingRole-${id}`);
+    const role = roleSelect && roleSelect.value ? roleSelect.value : 'user';
+    await db.collection('registeredUsers').doc(id).set({
+      email: email,
+      role: role,
+      approvedAt: new Date().toISOString(),
+      approvedBy: getSessionEmail()||'system'
+    });
+    await db.collection('pendingUsers').doc(id).delete();
+    await refreshUsersLists();
+  }catch(e){ console.error(e); alert('Failed to approve.'); }
+};
+window.rejectUser = async function(id){
+  try{ await db.collection('pendingUsers').doc(id).delete(); await refreshUsersLists(); }catch(e){ console.error(e); alert('Failed'); }
+};
+window.removeWhitelist = async function(id){
+  try{ await db.collection('registeredUsers').doc(id).delete(); await refreshUsersLists(); }catch(e){ console.error(e); alert('Failed'); }
+};
+window.updateWhitelistRole = async function(id){
+  try{
+    const select = document.getElementById(`wlRole-${id}`);
+    if(!select){ alert('Role selector not found'); return; }
+    const newRole = select.value || 'user';
+    const docRef = db.collection('registeredUsers').doc(id);
+    const snap = await docRef.get();
+    if(!snap.exists){ alert('User not found'); return; }
+    await docRef.update({ role: newRole });
+    await refreshUsersLists();
+  }catch(e){ console.error(e); alert('Failed to update role'); }
+};
+
+/* =========================
+   Auth UI interactions
+*/
+btnShowAuth.addEventListener('click', ()=> { authOverlay.style.display='flex'; tabRegister.click(); });
+authClose.addEventListener('click', ()=> { authOverlay.style.display='none'; });
+if(matchInfoClose && matchInfoOverlay){
+  matchInfoClose.addEventListener('click', ()=> { matchInfoOverlay.style.display='none'; });
+}
+
+// Auth tabs
+tabRegister.addEventListener('click', ()=> { tabRegister.classList.add('primary'); tabLogin.classList.remove('primary'); registerForm.style.display='block'; loginForm.style.display='none'; });
+tabLogin.addEventListener('click', ()=> { tabLogin.classList.add('primary'); tabRegister.classList.remove('primary'); loginForm.style.display='block'; registerForm.style.display='none'; });
+
+regBtn.addEventListener('click', async ()=>{
+  const e = (regEmail.value||'').trim().toLowerCase();
+  const c = (regEmailConfirm.value||'').trim().toLowerCase();
+  regMsg.style.display='none';
+  if(!e || !c){ regMsg.style.display='block'; regMsg.style.color='#f88'; regMsg.innerText='Please enter and confirm your email.'; return; }
+  if(e !== c){ regMsg.style.display='block'; regMsg.style.color='#f88'; regMsg.innerText='Emails do not match.'; return; }
+  try{
+    // add to pending
+    await db.collection('pendingUsers').doc(encodeEmailKey(e)).set({ email: e, requestedAt: new Date().toISOString() });
+    regMsg.style.display='block'; regMsg.style.color='#8f8'; regMsg.innerText='Request submitted — wait for approval.';
+    regEmail.value=''; regEmailConfirm.value='';
+    // switch to login to await sign-in link once approved
+    tabLogin.click();
+  }catch(err){
+    console.error(err); regMsg.style.display='block'; regMsg.style.color='#f88'; regMsg.innerText='Registration failed. See console.';
+  }
+});
+
+// Email link sign-in handler
+loginBtn.addEventListener('click', async ()=>{
+  const e = (loginEmail.value||'').trim().toLowerCase();
+  loginMsg.style.display='none';
+  if(!e){ loginMsg.style.display='block'; loginMsg.style.color='#f88'; loginMsg.innerText='Enter your registered email.'; return; }
+  try{
+    const doc = await db.collection('registeredUsers').doc(encodeEmailKey(e)).get();
+    if(!doc.exists){
+      loginMsg.style.display='block'; loginMsg.style.color='#f88'; loginMsg.innerText='Email not registered. Register first or request approval.';
+      // optionally add to pending
+      await addToPending(e);
+      return;
+    }
+    await auth.sendSignInLinkToEmail(e, actionCodeSettings);
+    window.localStorage.setItem('emailForSignIn', e);
+    loginMsg.style.display='block'; loginMsg.style.color='#8f8'; loginMsg.innerText='Sign-in link sent. Check your email.';
+    loginEmail.value='';
+  }catch(err){
+    console.error(err); loginMsg.style.display='block'; loginMsg.style.color='#f88'; loginMsg.innerText='Failed to send link. See console.';
+  }
+});
+
+// Google sign-in (shared for register and login buttons)
+async function handleGoogleSignIn(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try{
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    if(user && user.email){
+      const email = (user.email||'').toLowerCase();
+      // if there's no registeredUsers entry, create one (or leave pending depending on your policy)
+      const ref = db.collection('registeredUsers').doc(encodeEmailKey(email));
+      const snap = await ref.get();
+      if(!snap.exists){
+        // Create registeredUsers doc but mark it approved if you want auto-allow; here we create as pending-like but we will allow sign-in only if whitelisted below
+        // For safety, we won't auto-approve: create record only if you want to.
+        // We'll allow sign-in only if whitelisted; otherwise add to pending and sign out.
+        await addToPending(email);
+      }
+      // Check whitelist
+      const wh = await isWhitelisted(email);
+      if(!wh){
+        alert('Your account is not whitelisted yet. A request has been added. Sign-in blocked for now.');
+        await addToPending(email);
+        await auth.signOut();
+        return;
+      }
+      // whitelisted -> allow and show app
+      authOverlay.style.display = 'none';
+      showSignedInUIForEmail(email);
+      // close overlay and show app
+    }
+  }catch(err){
+    console.error('Google sign-in failed', err);
+    alert('Google sign-in failed. See console.');
+  }
+}
+if(regGoogleBtn) regGoogleBtn.addEventListener('click', handleGoogleSignIn);
+if(loginGoogleBtn) loginGoogleBtn.addEventListener('click', handleGoogleSignIn);
+
+// Admin bypass code (session-only)
+codeAccessBtn.addEventListener('click', async ()=>{
+  const email = (loginEmail.value||'').trim().toLowerCase();
+  const code = (upgradeCodeInput.value||'').trim();
+  codeAccessMsg.style.display = 'block';
+  if(!email){ codeAccessMsg.style.color='red'; codeAccessMsg.innerText = 'Enter an email first.'; return; }
+  if(code !== UPGRADE_ADMIN_CODE){ codeAccessMsg.style.color='red'; codeAccessMsg.innerText = 'Invalid code.'; return; }
+  // grant session admin role (localStorage)
+  localStorage.setItem('go_currentEmail', email);
+  localStorage.setItem('go_currentRole', 'admin');
+  localStorage.setItem('go_displayName', email.split('@')[0] || email);
+  localSessionRole = 'admin';
+  codeAccessMsg.style.color='green';
+  codeAccessMsg.innerText = 'Temporary admin session granted for ' + email;
+  // hide overlay and update UI
+  authOverlay.style.display = 'none';
+  applyRoleToUI('admin');
+  showUserBadge();
+  await loadUsersTab();
+  // Admin bypass: also show glitch intro, then tour
+  playGlitchIntro(()=>{
+    maybeShowWalkthrough(email);
+  });
+});
+
+// Handle passwordless email sign-in completion (if page loaded from email link)
+if (auth.isSignInWithEmailLink && auth.isSignInWithEmailLink(window.location.href)) {
+  // complete sign-in
+  let email = window.localStorage.getItem('emailForSignIn') || '';
+  if (!email) {
+    email = window.prompt('Please enter your email to complete sign-in:');
+  }
+  if (email) {
+    auth.signInWithEmailLink(email, window.location.href).then(async (result) => {
+      window.localStorage.removeItem('emailForSignIn');
+      // check whitelist
+      const wh = await isWhitelisted(email);
+      if(!wh){
+        // sign user out and show overlay with notice
+        await auth.signOut();
+        alert('Your account is not whitelisted yet. Request is in queue.');
+        await addToPending(email);
+        authOverlay.style.display = 'flex';
+        return;
+      }
+      authOverlay.style.display = 'none';
+      showSignedInUIForEmail(email);
+    }).catch(err=>{
+      console.error('Error completing sign-in:', err);
+      alert('Sign-in failed. See console.');
+      authOverlay.style.display = 'flex';
+    });
+  } else {
+    // no email — show overlay
+    authOverlay.style.display = 'flex';
+  }
+}
+
+/* =========================
+   Auth state & session helpers
+*/
+function getSessionEmail(){
+  // prefer firebase user if signed in, else localStorage fallback for code bypass
+  try{
+    const u = auth.currentUser;
+    if(u && u.email) return u.email.toLowerCase();
+  }catch(e){}
+  return localStorage.getItem('go_currentEmail') || null;
+}
+function getSessionRole(){
+  // prefer local admin bypass if present, else registeredUsers role in localStorage (set on sign-in)
+  const r1 = localSessionRole || localStorage.getItem('go_currentRole') || null;
+  return r1;
+}
+function setSessionForUser(email, role, displayName){
+  if(email) localStorage.setItem('go_currentEmail', email.toLowerCase());
+  if(role) localStorage.setItem('go_currentRole', role);
+  if(displayName) localStorage.setItem('go_displayName', displayName);
+}
+function clearSession(){
+  localStorage.removeItem('go_currentEmail');
+  localStorage.removeItem('go_currentRole');
+  localStorage.removeItem('go_displayName');
+  localSessionRole = null;
+}
+
+btnSignOut.addEventListener('click', async ()=>{
+  try{
+    await auth.signOut();
+  }catch(e){}
+  clearSession();
+  updateSignedInSignedOutUI(false);
+  restrictUIForRole(null);
+  if(authOverlay) authOverlay.style.display = 'flex';
+});
+
+function playGlitchIntro(afterIntro){
+  if(!glitchIntro) {
+    if(typeof afterIntro === 'function') afterIntro();
+    return;
+  }
+  glitchIntro.style.opacity = '1';
+  glitchIntro.style.display = 'flex';
+  glitchIntro.offsetHeight; // force reflow for transition
+  // Keep intro fully visible for ~3 seconds, then fade out
+  setTimeout(()=>{
+    glitchIntro.style.transition = 'opacity 0.9s ease';
+    glitchIntro.style.opacity = '0';
+    setTimeout(()=>{
+      glitchIntro.style.display = 'none';
+      glitchIntro.style.opacity = '';
+      glitchIntro.style.transition = '';
+      if(typeof afterIntro === 'function') afterIntro();
+    }, 900);
+  }, 3000);
+}
+
+/* Show signed-in UI (used after successful sign-in) */
+async function showSignedInUIForEmail(email){
+  if(!email) return;
+  // look up role from registeredUsers
+  try{
+    const doc = await db.collection('registeredUsers').doc(encodeEmailKey(email)).get();
+    let role = 'user';
+    if(doc.exists){
+      const d = doc.data();
+      role = d.role || 'user';
+    } else {
+      // if not found, treat as pending — put them into pending
+      await addToPending(email);
+      role = 'queued';
+    }
+    // persist session
+    setSessionForUser(email, role, (email.split('@')[0]||email));
+    updateSignedInSignedOutUI(true);
+    applyRoleToUI(role);
+    if(role === 'admin') await loadUsersTab();
+    authOverlay.style.display = 'none';
+    // After login: full glitch intro, then start tour
+    playGlitchIntro(()=>{
+      maybeShowWalkthrough(email);
+    });
+  }catch(e){ console.error(e); alert('Sign-in succeeded but something failed. See console.'); }
+}
+
+/* Update header auth area */
+function updateSignedInSignedOutUI(signedIn){
+  if(signedIn){
+    signedInArea.style.display = 'block';
+    signedOutArea.style.display = 'none';
+    const name = localStorage.getItem('go_displayName') || (getSessionEmail()||'').split('@')[0] || '';
+    const email = getSessionEmail() || '';
+    userNameEl.innerText = name;
+    userEmailEl.innerText = email;
+  } else {
+    signedInArea.style.display = 'none';
+    signedOutArea.style.display = 'block';
+    userNameEl.innerText = '';
+    userEmailEl.innerText = '';
+  }
+}
+
+/* Show user badge in top-right (or update sidebar area) */
+function showUserBadge(){
+  try{
+    const name = localStorage.getItem('go_displayName') || (getSessionEmail()||'').split('@')[0] || 'Guest';
+    const role = localStorage.getItem('go_currentRole') || 'user';
+    userNameEl.innerText = name;
+    userEmailEl.innerText = getSessionEmail() || '';
+    signedInArea.style.display = 'block'; signedOutArea.style.display='none';
+  }catch(e){ console.warn('showUserBadge', e); }
+}
+
+/* =========================
+   Role -> UI restrictions
+   Roles:
+   - queued / in-que / null => only Home
+   - user => Home, Live, Matches
+   - teacher => Home, Sports, Scoring, Matches, Live
+   - admin => everything (Home, Sports, Scoring, Matches, Live, Users)
+*/
+function restrictUIForRole(role){
+  // Normalize role string
+  const r = (role || '').toString().toLowerCase();
+  let normalized = r;
+  if(!r || r === 'queued' || r === 'in-que') normalized = 'queued';
+
+  // Determine allowed tabs for this role
+  let allowedTabs = [];
+  if(normalized === 'admin'){
+    allowedTabs = ['home','sports','scoring','matches','live','users','about'];
+  } else if(normalized === 'teacher'){
+    allowedTabs = ['home','sports','scoring','matches','live','about'];
+  } else if(normalized === 'user'){
+    allowedTabs = ['home','live','matches','about'];
+  } else { // queued or unknown => only home + about
+    allowedTabs = ['home','about'];
+  }
+
+  const nav = document.querySelectorAll('.sidebar nav button[data-tab]');
+  nav.forEach(b=>{
+    const tab = b.dataset.tab;
+    if(allowedTabs.includes(tab)){
+      b.classList.remove('disabled');
+      b.style.display = 'block';
+    } else {
+      b.classList.add('disabled');
+      b.style.display = 'none';
+    }
+  });
+
+  // Ensure currently visible tab is allowed; otherwise, fall back to first allowed tab
+  const activeSection = document.querySelector('.tab[style*="display:block"]');
+  const fallbackTab = allowedTabs[0] || 'home';
+  if(!activeSection || !allowedTabs.includes(activeSection.id)){
+    showTab(fallbackTab);
+  }
+}
+
+/* apply role to UI after sign-in */
+function applyRoleToUI(role){
+  if(!role) role = null;
+  localStorage.setItem('go_currentRole', role || '');
+  showUserBadge();
+  restrictUIForRole(role);
+}
+
+/* On page load, restore session if any in localStorage */
+(function restoreSession(){
+  const email = localStorage.getItem('go_currentEmail');
+  const role = localStorage.getItem('go_currentRole');
+  const name = localStorage.getItem('go_displayName');
+  if(email){
+    userNameEl.innerText = name || (email.split('@')[0] || '');
+    userEmailEl.innerText = email;
+    signedInArea.style.display = 'block';
+    signedOutArea.style.display = 'none';
+    restrictUIForRole(role || 'queued');
+    // Do not auto-play intro on reload; only after a fresh login
+  } else {
+    signedInArea.style.display = 'none';
+    signedOutArea.style.display = 'block';
+    restrictUIForRole(null);
+  }
+})();
+
+/* Listen to firebase auth state changes (synchronization) */
+auth.onAuthStateChanged(async user=>{
+  if(user && user.email){
+    const email = user.email.toLowerCase();
+    // Check registeredUsers - if not present, sign out and show overlay with message
+    const doc = await db.collection('registeredUsers').doc(encodeEmailKey(email)).get();
+    if(!doc.exists){
+      // Place in pending and sign out - user must be approved first
+      await addToPending(email);
+      await auth.signOut();
+      alert('Your account is not yet approved. A request has been placed. Please wait for approval.');
+      authOverlay.style.display = 'flex';
+      return;
+    }
+    // user is whitelisted
+    const role = doc.data().role || 'user';
+    setSessionForUser(email, role, user.displayName || (email.split('@')[0]||''));
+    updateSignedInSignedOutUI(true);
+    applyRoleToUI(role);
+    if(role === 'admin') await loadUsersTab();
+    maybeShowWalkthrough(email);
+  } else {
+    // not signed in
+    // do nothing here — we may have local session via bypass code
+  }
+});
+
+/* =========================
+   Wiring basic tabs and scoring JS (kept from your original file)
+   NOTE: For brevity I've included only the essential scoring UI wiring.
+   The original file's scoring behavior and RTDB listeners are preserved below.
+*/
+const SPORTS = ['football','basketball','volleyball','kabaddi','tugofwar','100m','200m','400m','4x100m','zigzag','discus','shotput','javelin','highjump','longjump','badminton_singles','badminton_doubles','tabletennis_singles','tabletennis_doubles','carrom_single','carrom_double','chess','taekwondo','skating'];
+const SPORT_LABEL = {
+  football:'Football',
+  basketball:'Basketball',
+  volleyball:'Volleyball',
+  kabaddi:'Kabaddi',
+  tugofwar:'Tug of War',
+  '100m':'100m Race',
+  '200m':'200m Race',
+  '400m':'400m Race',
+  '4x100m':'4x100m Relay',
+  zigzag:'Zig Zag Relay',
+  discus:'Discus Throw',
+  shotput:'Shot Put',
+  javelin:'Javelin Throw',
+  highjump:'High Jump',
+  longjump:'Long Jump',
+  badminton_singles:'Badminton Singles',
+  badminton_doubles:'Badminton Doubles',
+  tabletennis_singles:'Table Tennis Singles',
+  tabletennis_doubles:'Table Tennis Doubles',
+  carrom_single:'Carrom Single',
+  carrom_double:'Carrom Double',
+  chess:'Chess',
+  taekwondo:'Taekwondo',
+  skating:'Skating'
+};
+const AGES = ['u12','u14','u16','u18'];
+const AGE_LABEL = {u12:'U12', u14:'U14', u16:'U16', u18:'U18' };
+
+const tabs = document.querySelectorAll('nav button[data-tab], .bottom-tabs button[data-tab]');
+document.querySelectorAll('nav button[data-tab]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    if(btn.classList.contains('disabled')) return;
+
+    // Animate title like iOS: brief scale/slide on tab change
+    document.body.classList.add('tab-changed');
+    setTimeout(()=>{ document.body.classList.remove('tab-changed'); }, 260);
+
+    // Update active state on nav buttons
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    btn.setAttribute('aria-current','page');
+    btn.classList.add('active');
+
+    const t = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(sec=>{
+      if(sec.id === t){
+        sec.classList.add('tab-active');
+        sec.classList.remove('tab-hidden');
+      } else {
+        sec.classList.remove('tab-active');
+        sec.classList.add('tab-hidden');
+      }
+    });
+
+    // Show symbol only on Home tab and restart its animation when Home is activated
+    const hs = document.getElementById('homeSymbol');
+    if(hs){
+      if(t === 'home'){
+        hs.style.display = 'flex';
+        hs.classList.remove('home-symbol-animate');
+        void hs.offsetWidth; // force reflow to restart animation
+        hs.classList.add('home-symbol-animate');
+      } else {
+        hs.style.display = 'none';
+      }
+    }
+
+    // Trigger home footer animation when Home tab is activated
+    const hf = document.getElementById('homeFooter');
+    if(hf && t === 'home'){
+      hf.classList.remove('home-footer-animate');
+      void hf.offsetWidth;
+      hf.classList.add('home-footer-animate');
+    }
+
+    // Close mobile sidebar after navigation
+    if(window.innerWidth <= 900 && sidebarEl){
+      setMobileSidebarOpen(false);
+    }
+  });
+});
+
+function showTab(tab){
+  const btn = document.querySelector(`nav button[data-tab="${tab}"]`);
+  if(btn && !btn.classList.contains('disabled')) btn.click();
+}
+
+function populateSportsAndFilters(){
+  const mSport = document.getElementById('mSport');
+  const mAge = document.getElementById('mAge');
+  const sportsGrid = document.getElementById('sportsGrid');
+  const filterSportScoring = document.getElementById('filterSportScoring');
+  const filterSportMatches = document.getElementById('filterSportMatches');
+  const filterSportLive = document.getElementById('filterSportLive');
+  const filterAgeScoring = document.getElementById('filterAgeScoring');
+  const filterAgeMatches = document.getElementById('filterAgeMatches');
+  const filterAgeLive = document.getElementById('filterAgeLive');
+
+  SPORTS.forEach(sp=>{
+    const label = SPORT_LABEL[sp] || sp;
+    const opt = document.createElement('option'); opt.value=sp; opt.innerText=label;
+    if(mSport) mSport.appendChild(opt);
+
+    const tile = document.createElement('div');
+    tile.className='card';
+    tile.style.cursor='default';
+    tile.innerHTML = `<div style="font-weight:900">${label}</div><div class="muted" style="font-size:13px">${sp}</div>`;
+    if(sportsGrid) sportsGrid.appendChild(tile);
+
+    const f1 = document.createElement('option'); f1.value=sp; f1.innerText=label;
+    if(filterSportScoring) filterSportScoring.appendChild(f1);
+    const f2 = f1.cloneNode(true); if(filterSportMatches) filterSportMatches.appendChild(f2);
+    const f3 = f1.cloneNode(true); if(filterSportLive) filterSportLive.appendChild(f3);
+  });
+  AGES.forEach(a=>{
+    const opt = document.createElement('option'); opt.value=a; opt.innerText=AGE_LABEL[a] || a;
+    if(mAge) mAge.appendChild(opt);
+
+    const fa1 = document.createElement('option'); fa1.value=a; fa1.innerText=AGE_LABEL[a] || a;
+    if(filterAgeScoring) filterAgeScoring.appendChild(fa1);
+    const fa2 = fa1.cloneNode(true); if(filterAgeMatches) filterAgeMatches.appendChild(fa2);
+    const fa3 = fa1.cloneNode(true); if(filterAgeLive) filterAgeLive.appendChild(fa3);
+  });
+}
+populateSportsAndFilters();
+
+/* Match timer state (per active score sheet) */
+let timerIntervalId = null;
+let timerRemainingSeconds = 0;
+
+function formatTimerSeconds(total){
+  total = Math.max(0, Math.floor(total || 0));
+  const m = String(Math.floor(total / 60)).padStart(2,'0');
+  const s = String(total % 60).padStart(2,'0');
+  return `${m}:${s}`;
+}
+
+function updateTimerLabelFromState(){
+  const tl = document.getElementById('timeLabel');
+  if(!tl) return;
+  tl.innerText = formatTimerSeconds(timerRemainingSeconds);
+}
+
+function startMatchTimer(){
+  // Always recompute remaining seconds from current controls before starting
+  resetMatchTimerFromDropdown();
+  if(timerRemainingSeconds <= 0){
+    alert('Set a duration (or minutes in Manual mode) before starting the timer.');
+    return;
+  }
+  if(timerIntervalId) clearInterval(timerIntervalId);
+  const statusEl = document.getElementById('statusLabel');
+  if(statusEl) statusEl.innerText = 'LIVE';
+  timerIntervalId = setInterval(()=>{
+    if(timerRemainingSeconds > 0){
+      timerRemainingSeconds -= 1;
+      updateTimerLabelFromState();
+    } else {
+      clearInterval(timerIntervalId);
+      timerIntervalId = null;
+      const sEl = document.getElementById('statusLabel');
+      if(sEl) sEl.innerText = 'TIME UP';
+    }
+  }, 1000);
+}
+
+function pauseMatchTimer(){
+  if(timerIntervalId){
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+  const statusEl = document.getElementById('statusLabel');
+  if(statusEl) statusEl.innerText = 'PAUSED';
+}
+
+function resetMatchTimerFromDropdown(){
+  const sel = document.getElementById('matchDuration');
+  const manualInput = document.getElementById('matchDurationManual');
+  let seconds = 0;
+
+  if(sel){
+    const value = parseInt(sel.value || '0', 10);
+    const isManual = value === 0;
+
+    // Show/hide manual minutes field based on selection
+    if(manualInput){
+      manualInput.style.display = isManual ? 'inline-block' : 'none';
+      if(!isManual && manualInput.value === ''){
+        // keep as-is; no-op
+      }
+    }
+
+    if(isManual){
+      const mins = manualInput ? parseInt(manualInput.value || '0', 10) : 0;
+      seconds = Number.isFinite(mins) ? Math.max(0, mins * 60) : 0;
+    } else {
+      seconds = Number.isFinite(value) ? Math.max(0, value) : 0;
+    }
+  }
+
+  timerRemainingSeconds = seconds;
+  if(timerIntervalId){
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+  updateTimerLabelFromState();
+}
+
+/* Minimal RTDB match list listener (keeps your scoring list updated) */
+let lastMatchSnapshot = {};
+rtdb.ref('matches').on('value', snap=>{
+  lastMatchSnapshot = snap.val() || {};
+  renderScoringList(lastMatchSnapshot);
+  renderMatchesList(lastMatchSnapshot);
+  renderLiveList(lastMatchSnapshot);
+});
+
+// Live search for scoring tab
+const searchScoringInput = document.getElementById('searchScoring');
+if(searchScoringInput){
+  searchScoringInput.addEventListener('input', ()=>{
+    scoringPage = 1;
+    renderScoringList(lastMatchSnapshot);
+  });
+}
+
+/* Pagination & render helpers */
+const PAGE_SIZE = 10;
+let scoringPage = 1;
+let matchesPage = 1;
+let livePage = 1;
+
+function renderPagination(containerId, currentPage, totalItems, onPageChange){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  if(totalItems <= PAGE_SIZE){
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.style.display = 'flex';
+  const maxButtonsToShow = 5;
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(totalPages, startPage + maxButtonsToShow - 1);
+  startPage = Math.max(1, endPage - maxButtonsToShow + 1);
+
+  const buttons = [];
+  buttons.push(`<button ${currentPage===1?'disabled':''} data-page="prev">&lt;</button>`);
+  for(let p=startPage;p<=endPage;p++){
+    buttons.push(`<button data-page="${p}" class="${p===currentPage?'active':''}">${p}</button>`);
+  }
+  buttons.push(`<button ${currentPage===totalPages?'disabled':''} data-page="next">&gt;</button>`);
+
+  container.innerHTML = buttons.join('');
+
+  container.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const val = btn.getAttribute('data-page');
+      if(!val) return;
+      let target = currentPage;
+      if(val === 'prev' && currentPage>1) target = currentPage-1;
+      else if(val === 'next' && currentPage<totalPages) target = currentPage+1;
+      else if(val !== 'prev' && val !== 'next') target = parseInt(val,10) || currentPage;
+      if(target !== currentPage) onPageChange(target);
+    });
+  });
+}
+
+function makeMatchCard(matchObj, matchId, section){
+  const m = matchObj || {};
+  const el = document.createElement('div'); el.className='match-card';
+  const left = document.createElement('div');
+
+  // Winner / loser summary for finished matches
+  let extraLine = '';
+  if(m.status === 'finished'){
+    // Taekwondo: KO winner overrides points
+    if(m.sport === 'taekwondo' && m.koWinner){
+      const winnerTeam = m.koWinner === 'A' ? m.teamA : m.teamB;
+      const loserTeam  = m.koWinner === 'A' ? m.teamB : m.teamA;
+      extraLine = `<div style=\"font-size:13px;margin-top:4px\">
+        <span class=\"winner\">Winner: ${winnerTeam} (by KO)</span>
+        &nbsp;&nbsp;
+        <span class=\"loser\">Loser: ${loserTeam}</span>
+      </div>`;
+    }
+    // Walkout / Bye result (all sports)
+    if(m.walkWin){
+      const winnerTeam = m.walkWin === 'A' ? m.teamA : m.teamB;
+      const loserTeam  = m.walkWin === 'A' ? m.teamB : m.teamA;
+      const method = m.walkType === 'bye' ? 'by Bye' : 'by Walkout';
+      extraLine = `<div style=\"font-size:13px;margin-top:4px\">
+        <span class=\"winner\">Winner: ${winnerTeam} (${method})</span>
+        &nbsp;&nbsp;
+        <span class=\"loser\">Loser: ${loserTeam}</span>
+      </div>`;
+    }
+    // Volleyball: use sets summary if available
+    else if(m.sport === 'volleyball' && Array.isArray(m.volleyballSets) && m.volleyballSets.length > 0){
+      let setsAWon = 0, setsBWon = 0;
+      m.volleyballSets.forEach(s=>{
+        const a = s.scoreA || 0;
+        const b = s.scoreB || 0;
+        if(a > b) setsAWon++;
+        else if(b > a) setsBWon++;
+      });
+
+      if(setsAWon > setsBWon){
+        extraLine = `<div style=\"font-size:13px;margin-top:4px\">
+          <span class=\"winner\">Winner: ${m.teamA} (${setsAWon}-${setsBWon} sets)</span>
+          &nbsp;&nbsp;
+          <span class=\"loser\">Loser: ${m.teamB}</span>
+        </div>`;
+      } else if(setsBWon > setsAWon){
+        extraLine = `<div style=\"font-size:13px;margin-top:4px\">
+          <span class=\"winner\">Winner: ${m.teamB} (${setsBWon}-${setsAWon} sets)</span>
+          &nbsp;&nbsp;
+          <span class=\"loser\">Loser: ${m.teamA}</span>
+        </div>`;
+      } else {
+        extraLine = `<div style=\"font-size:13px;margin-top:4px\" class=\"muted\">Match tied (${setsAWon}-${setsBWon} sets)</div>`;
+      }
+    } else {
+      // Default: decide winner by total score (include points)
+      const scoreA = m.scoreA || 0;
+      const scoreB = m.scoreB || 0;
+      if(scoreA > scoreB){
+        extraLine = `<div style=\"font-size:13px;margin-top:4px\">
+          <span class=\"winner\">Winner: ${m.teamA} (${scoreA}-${scoreB})</span>
+          &nbsp;&nbsp;
+          <span class=\"loser\">Loser: ${m.teamB}</span>
+        </div>`;
+      } else if(scoreB > scoreA){
+        extraLine = `<div style=\"font-size:13px;margin-top:4px\">
+          <span class=\"winner\">Winner: ${m.teamB} (${scoreB}-${scoreA})</span>
+          &nbsp;&nbsp;
+          <span class=\"loser\">Loser: ${m.teamA}</span>
+        </div>`;
+      } else {
+        // Handle draw / tie (highlighted)
+        extraLine = `<div style=\"font-size:13px;margin-top:4px\" class=\"tie\">Match tied (${scoreA}-${scoreB})</div>`;
+      }
+    }
+  }
+
+  // For Matches tab, show final score beside team names (except taekwondo KO)
+  let teamsLine = `${m.teamA} vs ${m.teamB}`;
+  const hasScore = (m.scoreA != null || m.scoreB != null);
+  const isTKOK = (m.sport === 'taekwondo' && m.koWinner);
+  if(section === 'matches' && hasScore && !isTKOK){
+    const sa = m.scoreA != null ? m.scoreA : 0;
+    const sb = m.scoreB != null ? m.scoreB : 0;
+    teamsLine += ` — ${sa} - ${sb}`;
+  }
+
+  const supervisorLine = m.referee
+    ? `<div class=\"muted\" style=\"font-size:12px\">Supervised by: ${escapeHtml(m.referee)}</div>`
+    : '';
+
+  const startedMs = m.startedAt || m.createdAt;
+  const dateKey = m.createdDateIST || getISTDateKeyFromMs(startedMs);
+  const timeLabel = getISTTimeLabel(startedMs);
+  const whenLine = startedMs
+    ? `<div class=\"muted\" style=\"font-size:12px\">${dateKey} • ${timeLabel} IST</div>`
+    : '';
+
+  left.innerHTML = `<div style=\"font-weight:900\">${SPORT_LABEL[m.sport] || m.sport} — ${AGE_LABEL[m.age] || m.age}</div>
+                    <div class=\"muted\" style=\"font-size:13px\">${teamsLine}</div>
+                    ${whenLine}
+                    ${supervisorLine}
+                    ${extraLine}`;
+  const right = document.createElement('div');
+  const badge = document.createElement('div'); badge.className='badge';
+  if(m.status==='live'){
+    badge.classList.add('live');
+    badge.innerText='LIVE';
+  } else if(m.status==='finished'){
+    badge.classList.add('done');
+    badge.innerText='FINISHED';
+  } else if(m.status==='wrong'){
+    badge.classList.add('wrong');
+    badge.innerText='WRONG';
+  } else {
+    badge.classList.add('scheduled');
+    badge.innerText=(m.round||'');
+  }
+  right.appendChild(badge);
+
+  // Read current role once for button logic
+  let role = '';
+  try{
+    if(typeof getSessionRole === 'function') role = (getSessionRole() || '').toLowerCase();
+  }catch(e){ role = ''; }
+
+  // Matches tab: show Info only (view details)
+  if(section === 'matches'){
+    const btnInfo = document.createElement('button'); btnInfo.className='btn'; btnInfo.style.marginLeft='8px'; btnInfo.innerText='Info';
+    btnInfo.addEventListener('click', ()=> showMatchInfo(matchId));
+    right.appendChild(btnInfo);
+  }
+  // Scoring tab: allow editing (scores) and team-name changes; admins also get Delete
+  else if(section === 'scoring'){
+    const btnOpen = document.createElement('button'); btnOpen.className='btn'; btnOpen.style.marginLeft='8px'; btnOpen.innerText='Open';
+    btnOpen.addEventListener('click', ()=> openScoreSheet(matchId));
+    right.appendChild(btnOpen);
+
+    // Teachers and admins: rename teams with warning
+    const btnRename = document.createElement('button'); btnRename.className='btn'; btnRename.style.marginLeft='8px'; btnRename.innerText='Edit teams';
+    btnRename.addEventListener('click', ()=> renameTeams(matchId));
+    right.appendChild(btnRename);
+
+    // Teachers and admins: mark match as wrong (created by mistake)
+    const btnWrong = document.createElement('button'); btnWrong.className='btn'; btnWrong.style.marginLeft='8px'; btnWrong.innerText='Mark wrong';
+    btnWrong.addEventListener('click', ()=> markMatchWrong(matchId));
+    right.appendChild(btnWrong);
+
+    // Admin-only: delete match
+    if(role === 'admin'){
+      const btnDelete = document.createElement('button'); btnDelete.className='btn danger'; btnDelete.style.marginLeft='8px'; btnDelete.innerText='Delete';
+      btnDelete.addEventListener('click', ()=> deleteMatch(matchId));
+      right.appendChild(btnDelete);
+    }
+  }
+  // Fallback (e.g., other sections): basic Open button
+  else {
+    const btnOpen = document.createElement('button'); btnOpen.className='btn'; btnOpen.style.marginLeft='8px'; btnOpen.innerText='Open';
+    btnOpen.addEventListener('click', ()=> openScoreSheet(matchId));
+    right.appendChild(btnOpen);
+  }
+
+  el.appendChild(left); el.appendChild(right);
+  return el;
+}
+
+// Who can edit a match: only its creator (referee email) or admins
+function canEditMatch(match){
+  if(!match) return false;
+
+  let role = '';
+  let email = '';
+  try{
+    if(typeof getSessionRole === 'function') role = getSessionRole() || '';
+    if(typeof getSessionEmail === 'function') email = getSessionEmail() || '';
+  }catch(e){
+    role = '';
+    email = '';
+  }
+
+  // Admin can edit all matches
+  if((role || '').toLowerCase() === 'admin') return true;
+
+  // Otherwise, only the supervisor (referee email) can edit
+  if(!match.referee) return false;
+  if(!email) return false;
+  return (match.referee || '').toLowerCase() === email.toLowerCase();
+}
+
+// Rename teams (Team A / Team B) for a match.
+// Allowed for: match creator (teacher) and admin. Shows a warning before changing.
+async function renameTeams(matchId){
+  const m = lastMatchSnapshot[matchId];
+  if(!m){ alert('Match not found'); return; }
+  if(!canEditMatch(m)){
+    alert('You are not allowed to edit this match.');
+    return;
+  }
+
+  const proceed = await showConfirm('WARNING: Changing team names will update this match everywhere (Scoring, Matches, Live). Continue?');
+  if(!proceed) return;
+
+  const currentA = m.teamA || 'Team A';
+  const currentB = m.teamB || 'Team B';
+  const newA = prompt('Enter new name for Team A:', currentA);
+  if(newA === null) return; // cancel
+  const newB = prompt('Enter new name for Team B:', currentB);
+  if(newB === null) return; // cancel
+
+  const finalA = (newA || '').trim();
+  const finalB = (newB || '').trim();
+  if(!finalA || !finalB){
+    alert('Team names cannot be empty.');
+    return;
+  }
+
+  const ref = rtdb.ref(`matches/${matchId}`);
+  ref.transaction(match=>{
+    if(!match) return match;
+    match.teamA = finalA;
+    match.teamB = finalB;
+    match.events = match.events || [];
+    match.events.unshift(`${(new Date()).toLocaleTimeString()} — Teams renamed to: ${finalA} vs ${finalB}`);
+    match.updatedAt = Date.now();
+    return match;
+  }, function(err){
+    if(err){ console.error('renameTeams failed', err); alert('Failed to update team names.'); }
+  });
+}
+
+// Mark a match as "wrong" (created by mistake) so admins can review later
+// Allowed for: match creator (teacher) and admins.
+async function markMatchWrong(matchId){
+  const m = lastMatchSnapshot[matchId];
+  if(!m){ alert('Match not found'); return; }
+  if(!canEditMatch(m)){
+    alert('You are not allowed to change this match.');
+    return;
+  }
+
+  const ok = await showConfirm('Mark this match as a WRONG match? It will move to the "Wrong" section for admin review.');
+  if(!ok) return;
+
+  const ref = rtdb.ref(`matches/${matchId}`);
+  const now = Date.now();
+  ref.transaction(match=>{
+    if(!match) return match;
+    match.status = 'wrong';
+    match.wrongMarkedAt = now;
+    match.wrongMarkedBy = getSessionEmail ? (getSessionEmail() || '') : '';
+    match.events = match.events || [];
+    match.events.unshift(`${(new Date()).toLocaleTimeString()} — Marked as WRONG match`);
+    match.updatedAt = now;
+    return match;
+  }, function(err){
+    if(err){ console.error('markMatchWrong failed', err); alert('Failed to mark match as wrong.'); }
+  });
+}
+
+// Delete a match (admin only) from RTDB
+function deleteMatch(matchId){
+  let role = '';
+  try{
+    if(typeof getSessionRole === 'function') role = (getSessionRole() || '').toLowerCase();
+  }catch(e){ role = ''; }
+
+  if(role !== 'admin'){
+    alert('Only admins can delete matches.');
+    return;
+  }
+
+  if(!confirm('Are you sure you want to permanently delete this match? This cannot be undone.')) return;
+
+  // If this match is currently open in the score sheet, close it after delete
+  const wasActive = (activeMatchId === matchId);
+
+  rtdb.ref(`matches/${matchId}`).remove().then(()=>{
+    if(wasActive){
+      const sheet = document.getElementById('scoreSheet');
+      if(sheet) sheet.classList.remove('show');
+      activeMatchId = null;
+    }
+  }).catch(err=>{
+    console.error('deleteMatch failed', err);
+    alert('Failed to delete match.');
+  });
+}
+
+// Simple info popup for Matches tab (uses overlay)
+function showMatchInfo(matchId){
+  const m = lastMatchSnapshot[matchId];
+  if(!m){ alert('Match not found'); return; }
+  if(!matchInfoOverlay || !matchInfoTitle || !matchInfoMeta || !matchInfoContent) return;
+
+  const sportLabel = SPORT_LABEL[m.sport] || m.sport;
+  const ageLabel = AGE_LABEL[m.age] || m.age;
+  const scoreA = m.scoreA || 0;
+  const scoreB = m.scoreB || 0;
+  const startedMs = m.startedAt || m.createdAt;
+  const startedDateKey = m.createdDateIST || getISTDateKeyFromMs(startedMs);
+  const startedTimeLabel = getISTTimeLabel(startedMs);
+
+  // Title and basic meta
+  matchInfoTitle.innerText = `${sportLabel} — ${ageLabel}`;
+  matchInfoMeta.innerText = `${m.teamA} vs ${m.teamB} • ${m.status || ''}`;
+
+  const lines = [];
+  lines.push(`<div><strong>Score:</strong> ${scoreA} - ${scoreB}</div>`);
+  if(startedMs){
+    lines.push(`<div><strong>Started:</strong> ${startedDateKey} • ${startedTimeLabel} (IST)</div>`);
+  }
+  if(m.referee){
+    lines.push(`<div><strong>Referee:</strong> ${escapeHtml(m.referee)}</div>`);
+  }
+
+  // Volleyball sets summary, if available
+  if(m.sport === 'volleyball' && Array.isArray(m.volleyballSets) && m.volleyballSets.length > 0){
+    let setsAWon = 0, setsBWon = 0;
+    m.volleyballSets.forEach(s=>{
+      const a = s.scoreA || 0;
+      const b = s.scoreB || 0;
+      if(a > b) setsAWon++;
+      else if(b > a) setsBWon++;
+    });
+    lines.push(`<div><strong>Sets:</strong> ${setsAWon}-${setsBWon} (A-B)</div>`);
+  }
+
+  // Sport-agnostic stats like fouls / penalties (if present)
+  if(m.stats){
+    const foulsA = m.stats.foulsA || 0;
+    const foulsB = m.stats.foulsB || 0;
+    const pensA  = m.stats.penaltiesA || 0;
+    const pensB  = m.stats.penaltiesB || 0;
+    if(foulsA || foulsB){
+      lines.push(`<div><strong>Fouls:</strong> ${foulsA}-${foulsB} (A-B)</div>`);
+    }
+    if(pensA || pensB){
+      lines.push(`<div><strong>Penalties:</strong> ${pensA}-${pensB} (A-B)</div>`);
+    }
+  }
+
+  // Event log (e.g., fouls, scores etc.)
+  const events = m.events || [];
+  if(events.length){
+    const items = events.slice(0, 15).map(ev=>`<li>${escapeHtml(ev)}</li>`).join('');
+    lines.push(`<div style="margin-top:8px"><strong>Events (latest first):</strong></div>`);
+    lines.push(`<ul style="margin:4px 0 0 16px;padding:0;font-size:13px;">${items}</ul>`);
+  }
+
+  matchInfoContent.innerHTML = lines.join('');
+  matchInfoOverlay.style.display = 'flex';
+}
+
+function applyFiltersToMatch(matchObj, section){
+  let sportFilter = 'all', ageFilter = 'all', dayFilter = 'all';
+  if(section==='scoring'){ sportFilter = (document.getElementById('filterSportScoring')||{value:'all'}).value; ageFilter = (document.getElementById('filterAgeScoring')||{value:'all'}).value; }
+  if(section==='matches'){ sportFilter = (document.getElementById('filterSportMatches')||{value:'all'}).value; ageFilter = (document.getElementById('filterAgeMatches')||{value:'all'}).value; }
+  if(section==='live'){ sportFilter = (document.getElementById('filterSportLive')||{value:'all'}).value; ageFilter = (document.getElementById('filterAgeLive')||{value:'all'}).value; }
+
+  if(sportFilter !== 'all' && matchObj.sport !== sportFilter) return false;
+  if(ageFilter !== 'all' && matchObj.age !== ageFilter) return false;
+
+  // Scoring tab: only show matches the current user can edit (creator) or admin,
+  // and then apply the text search.
+  if(section==='scoring'){
+    if(!canEditMatch(matchObj)) return false;
+    const q = (document.getElementById('searchScoring')||{value:''}).value.toLowerCase();
+    if(q){
+      const hay = `${matchObj.teamA} ${matchObj.teamB} ${matchObj.sport} ${matchObj.age}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+  }
+
+  // Matches tab filters (view + search)
+  if(section==='matches'){
+    const viewFilter = window.matchesViewFilter || 'all';
+    if(viewFilter==='live' && matchObj.status!=='live') return false;
+    if(viewFilter==='finished' && matchObj.status!=='finished') return false;
+    if(viewFilter==='wrong' && matchObj.status!=='wrong') return false;
+    const q = (document.getElementById('searchMatches')||{value:''}).value.toLowerCase();
+    if(q){
+      const hay = `${matchObj.teamA} ${matchObj.teamB} ${matchObj.sport} ${matchObj.age}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+  }
+  if(section==='live' && matchObj.status!=='live') return false;
+
+  // Day filter (all sections): compare IST date key
+  if(section==='scoring') dayFilter = (document.getElementById('filterDayScoring')||{value:'all'}).value || 'all';
+  if(section==='matches') dayFilter = (document.getElementById('filterDayMatches')||{value:'all'}).value || 'all';
+  if(section==='live')    dayFilter = (document.getElementById('filterDayLive')||{value:'all'}).value || 'all';
+  if(dayFilter !== 'all'){
+    const dateKey = matchObj.createdDateIST || getISTDateKeyFromMs(matchObj.createdAt || matchObj.startedAt || Date.now());
+    if(dateKey !== dayFilter) return false;
+  }
+
+  return true;
+}
+
+function renderScoringList(data){
+  const scoringList = document.getElementById('scSchedule');
+  if(!scoringList) return;
+  scoringList.innerHTML = '';
+
+  // Build filtered & sorted array first
+  // Populate date filter options (Scoring)
+  const daySelect = document.getElementById('filterDayScoring');
+  if(daySelect){
+    const existing = daySelect.value || 'all';
+    const dateKeys = new Set();
+    Object.values(data||{}).forEach(m=>{
+      const key = m.createdDateIST || getISTDateKeyFromMs(m.createdAt || m.startedAt);
+      if(key) dateKeys.add(key);
+    });
+    const sortedKeys = Array.from(dateKeys).sort();
+    daySelect.innerHTML = '<option value="all">All dates</option>' +
+      sortedKeys.map(k=>`<option value="${k}">${k}</option>`).join('');
+    if(sortedKeys.includes(existing)) daySelect.value = existing;
+  }
+
+  const allIds = Object.keys(data||{}).sort((a,b)=>{
+    const ma = data[a];
+    const mb = data[b];
+    const timeOrder = (document.getElementById('filterTimeScoring')||{value:'latest'}).value || 'latest';
+    const rank = m => {
+      const s = m.status || 'scheduled';
+      if(s === 'live') return 0;
+      if(s === 'scheduled') return 1;
+      if(s === 'finished') return 2;
+      if(s === 'wrong') return 3; // wrong matches always last
+      return 2;
+    };
+    const ra = rank(ma||{});
+    const rb = rank(mb||{});
+    if(ra !== rb) return ra - rb;
+    const ca = ma && ma.createdAt ? ma.createdAt : 0;
+    const cb = mb && mb.createdAt ? mb.createdAt : 0;
+    return timeOrder === 'oldest' ? (ca - cb) : (cb - ca);
+  });
+  const filteredIds = allIds.filter(id=> applyFiltersToMatch(data[id],'scoring'));
+  const total = filteredIds.length;
+
+  if(total === 0){
+    scoringList.innerHTML='<div class="muted">No matches</div>';
+    renderPagination('scScoringPagination', 1, 0, ()=>{});
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if(scoringPage>totalPages) scoringPage = totalPages;
+  const start = (scoringPage-1)*PAGE_SIZE;
+  const pageIds = filteredIds.slice(start, start+PAGE_SIZE);
+
+  pageIds.forEach(id=>{
+    const m = data[id];
+    scoringList.appendChild(makeMatchCard(m,id,'scoring'));
+  });
+
+  renderPagination('scScoringPagination', scoringPage, total, (newPage)=>{
+    scoringPage = newPage;
+    renderScoringList(lastMatchSnapshot);
+  });
+}
+
+function renderMatchesList(data){
+  const matchesList = document.getElementById('matchesList');
+  if(!matchesList) return;
+  matchesList.innerHTML = '';
+
+  // Populate date filter options (Matches)
+  const daySelect = document.getElementById('filterDayMatches');
+  if(daySelect){
+    const existing = daySelect.value || 'all';
+    const dateKeys = new Set();
+    Object.values(data||{}).forEach(m=>{
+      const key = m.createdDateIST || getISTDateKeyFromMs(m.createdAt || m.startedAt);
+      if(key) dateKeys.add(key);
+    });
+    const sortedKeys = Array.from(dateKeys).sort();
+    daySelect.innerHTML = '<option value="all">All dates</option>' +
+      sortedKeys.map(k=>`<option value="${k}">${k}</option>`).join('');
+    if(sortedKeys.includes(existing)) daySelect.value = existing;
+  }
+
+  const allIds = Object.keys(data||{}).sort((a,b)=>{
+    const ma = data[a];
+    const mb = data[b];
+    const timeOrder = (document.getElementById('filterTimeMatches')||{value:'latest'}).value || 'latest';
+    const rank = m => {
+      const s = m.status || 'scheduled';
+      if(s === 'live') return 0;
+      if(s === 'scheduled') return 1;
+      if(s === 'finished') return 2;
+      if(s === 'wrong') return 3; // wrong matches always last
+      return 2;
+    };
+    const ra = rank(ma||{});
+    const rb = rank(mb||{});
+    if(ra !== rb) return ra - rb;
+    const ca = ma && ma.createdAt ? ma.createdAt : 0;
+    const cb = mb && mb.createdAt ? mb.createdAt : 0;
+    return timeOrder === 'oldest' ? (ca - cb) : (cb - ca);
+  });
+  const filteredIds = allIds.filter(id=> applyFiltersToMatch(data[id],'matches'));
+  const total = filteredIds.length;
+
+  if(total === 0){
+    matchesList.innerHTML='<div class="muted">No matches</div>';
+    renderPagination('matchesPagination', 1, 0, ()=>{});
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if(matchesPage>totalPages) matchesPage = totalPages;
+  const start = (matchesPage-1)*PAGE_SIZE;
+  const pageIds = filteredIds.slice(start, start+PAGE_SIZE);
+
+  pageIds.forEach(id=>{
+    const m = data[id];
+    matchesList.appendChild(makeMatchCard(m,id,'matches'));
+  });
+
+  renderPagination('matchesPagination', matchesPage, total, (newPage)=>{
+    matchesPage = newPage;
+    renderMatchesList(lastMatchSnapshot);
+  });
+}
+
+function renderLiveList(data){
+  const liveList = document.getElementById('liveList');
+  if(!liveList) return;
+  liveList.innerHTML = '';
+
+  // Populate date filter options (Live)
+  const daySelect = document.getElementById('filterDayLive');
+  if(daySelect){
+    const existing = daySelect.value || 'all';
+    const dateKeys = new Set();
+    Object.values(data||{}).forEach(m=>{
+      const key = m.createdDateIST || getISTDateKeyFromMs(m.createdAt || m.startedAt);
+      if(key) dateKeys.add(key);
+    });
+    const sortedKeys = Array.from(dateKeys).sort();
+    daySelect.innerHTML = '<option value="all">All dates</option>' +
+      sortedKeys.map(k=>`<option value="${k}">${k}</option>`).join('');
+    if(sortedKeys.includes(existing)) daySelect.value = existing;
+  }
+
+  const timeOrder = (document.getElementById('filterTimeLive')||{value:'latest'}).value || 'latest';
+  const allIds = Object.keys(data||{}).sort((a,b)=>{
+    const ca = data[a] && data[a].createdAt ? data[a].createdAt : 0;
+    const cb = data[b] && data[b].createdAt ? data[b].createdAt : 0;
+    return timeOrder === 'oldest' ? (ca - cb) : (cb - ca);
+  });
+  const filteredIds = allIds.filter(id=> applyFiltersToMatch(data[id],'live'));
+  const total = filteredIds.length;
+
+  if(total === 0){
+    liveList.innerHTML='<div class="muted">No live matches</div>';
+    renderPagination('livePagination', 1, 0, ()=>{});
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if(livePage>totalPages) livePage = totalPages;
+  const start = (livePage-1)*PAGE_SIZE;
+  const pageIds = filteredIds.slice(start, start+PAGE_SIZE);
+
+  pageIds.forEach(id=>{
+    const m = data[id];
+    const el = document.createElement('div'); el.className='match-card';
+    const supervisorLine = m.referee
+      ? `<div class=\"muted\" style=\"font-size:12px\">Supervised by: ${escapeHtml(m.referee)}</div>`
+      : '';
+    el.innerHTML = `<div>
+                      <div style=\"font-weight:900\">${SPORT_LABEL[m.sport]||m.sport}</div>
+                      <div class=\"muted\" style=\"font-size:13px\">${m.teamA} vs ${m.teamB}</div>
+                      ${supervisorLine}
+                    </div>
+                    <div style=\"text-align:right\">
+                      <div style=\"font-weight:900;font-size:22px\">${m.scoreA} - ${m.scoreB}</div>
+                      <div class=\"muted\" style=\"font-size:12px\">${new Date(m.startedAt).toLocaleTimeString()} </div>
+                    </div>`;
+    // Live tab is read-only but allows viewing details via the info overlay
+    el.addEventListener('click', ()=> showMatchInfo(id));
+    liveList.appendChild(el);
+  });
+
+  renderPagination('livePagination', livePage, total, (newPage)=>{
+    livePage = newPage;
+    renderLiveList(lastMatchSnapshot);
+  });
+}
+
+// (By Sport tab removed)
+
+/* Score sheet behavior (RTDB) — included from original file */
+let activeMatchId = null;
+
+/* =========================
+   NEW SCORING BUTTON HELPERS
+   ========================= */
+function createScoreButton(text, side, delta, parentEl){
+  const btn = document.createElement('button');
+  btn.innerText = text;
+  btn.className = 'btn';
+  // Pass the button's text as the eventLabel
+  btn.addEventListener('click', ()=> applyScore(side, delta, text)); 
+  parentEl.appendChild(btn);
+}
+
+function createUndoButton(side, parentEl){
+  const btn = document.createElement('button');
+  btn.innerText = 'Undo';
+  btn.className = 'btn';
+  btn.addEventListener('click', ()=> undoLast(side));
+  parentEl.appendChild(btn);
+}
+
+async function openScoreSheet(matchId){
+  const m = lastMatchSnapshot[matchId];
+  if(!m){ alert('Match not found'); return; }
+
+  // Access control: only the match creator (referee email) or admins can edit
+  if(!canEditMatch(m)){
+    alert('You are not allowed to edit this match. Only the supervisor and admins can edit scores.');
+    return;
+  }
+
+  // If match is finished, confirm before allowing edits
+  if(m.status === 'finished'){
+    const ok = await showConfirm('This match is already finished. Do you want to edit the points?');
+    if(!ok) return;
+  }
+
+  activeMatchId = matchId;
+  document.getElementById('teamAName').innerText = m.teamA || 'Team A';
+  document.getElementById('teamASchool').innerText = m.teamA;
+  document.getElementById('teamBName').innerText = m.teamB || 'Team B';
+  document.getElementById('teamBSchool').innerText = m.teamB;
+  document.getElementById('teamAScore').innerText = m.scoreA||0;
+  document.getElementById('teamBScore').innerText = m.scoreB||0;
+  document.getElementById('scoreCenter').innerText = `${(m.scoreA||0)} - ${(m.scoreB||0)}`;
+  document.getElementById('statusLabel').innerText = (m.status||'').toUpperCase();
+  // Initialize timer display based on the selected duration (can be adjusted from the dropdown)
+  resetMatchTimerFromDropdown();
+  document.getElementById('eventLog').innerHTML = (m.events || []).map(ev=>`<div>${ev}</div>`).join('');
+
+  // Reset quarter to Q1 whenever a match is opened
+  const quarterSelect = document.getElementById('quarterSelect');
+  if(quarterSelect) quarterSelect.value = '1';
+
+  // Referee line
+  const refLine = document.getElementById('refereeLine');
+  if(refLine){
+    if(m.referee){
+      refLine.style.display = 'block';
+      refLine.textContent = `scored by: ${m.referee}`;
+    } else {
+      refLine.style.display = 'none';
+      refLine.textContent = '';
+    }
+  }
+  
+  // === MODIFIED: Add dynamic buttons ===
+  const sport = m.sport;
+  const teamAControls = document.getElementById('teamAControls');
+  const teamBControls = document.getElementById('teamBControls');
+  teamAControls.innerHTML = '';
+  teamBControls.innerHTML = '';
+
+  // Populate controls based on sport
+  switch(sport){
+    case 'basketball':
+      createScoreButton('+1 (FT)', 'A', 1, teamAControls);
+      createScoreButton('+2 (FG)', 'A', 2, teamAControls);
+      createScoreButton('+3 (3PT)', 'A', 3, teamAControls);
+      createUndoButton('A', teamAControls);
+
+      createScoreButton('+1 (FT)', 'B', 1, teamBControls);
+      createScoreButton('+2 (FG)', 'B', 2, teamBControls);
+      createScoreButton('+3 (3PT)', 'B', 3, teamBControls);
+      createUndoButton('B', teamBControls);
+      break;
+
+    case 'kabaddi':
+      createScoreButton('+1 Raid', 'A', 1, teamAControls);
+      createScoreButton('+1 Bonus', 'A', 1, teamAControls);
+      createScoreButton('+1 Tackle', 'A', 1, teamAControls);
+      createScoreButton('+2 All-Out', 'A', 2, teamAControls);
+      createUndoButton('A', teamAControls);
+
+      createScoreButton('+1 Raid', 'B', 1, teamBControls);
+      createScoreButton('+1 Bonus', 'B', 1, teamBControls);
+      createScoreButton('+1 Tackle', 'B', 1, teamBControls);
+      createScoreButton('+2 All-Out', 'B', 2, teamBControls);
+      createUndoButton('B', teamBControls);
+      break;
+
+    case 'taekwondo':
+      // Taekwondo: keep point scoring AND add KO button
+      // Points for Team A
+      createScoreButton('+1 Punch', 'A', 1, teamAControls);
+      createScoreButton('+1 Penalty', 'A', 1, teamAControls);
+      createScoreButton('+2 Kick Torso', 'A', 2, teamAControls);
+      createScoreButton('+3 Kick Head', 'A', 3, teamAControls);
+      createScoreButton('+4 Spin Torso', 'A', 4, teamAControls);
+      createScoreButton('+5 Spin Head', 'A', 5, teamAControls);
+      // KO button for Team A
+      const koBtnA = document.createElement('button');
+      koBtnA.innerText = '+Knockout';
+      koBtnA.className = 'btn';
+      koBtnA.style.background = '#2ecc71';
+      koBtnA.style.color = '#fff';
+      koBtnA.style.fontWeight = '800';
+      koBtnA.addEventListener('click', ()=> applyKnockout('A'));
+      teamAControls.appendChild(koBtnA);
+      // Undo for Team A
+      createUndoButton('A', teamAControls);
+
+      // Points for Team B
+      createScoreButton('+1 Punch', 'B', 1, teamBControls);
+      createScoreButton('+1 Penalty', 'B', 1, teamBControls);
+      createScoreButton('+2 Kick Torso', 'B', 2, teamBControls);
+      createScoreButton('+3 Kick Head', 'B', 3, teamBControls);
+      createScoreButton('+4 Spin Torso', 'B', 4, teamBControls);
+      createScoreButton('+5 Spin Head', 'B', 5, teamBControls);
+      // KO button for Team B
+      const koBtnB = document.createElement('button');
+      koBtnB.innerText = '+Knockout';
+      koBtnB.className = 'btn';
+      koBtnB.style.background = '#2ecc71';
+      koBtnB.style.color = '#fff';
+      koBtnB.style.fontWeight = '800';
+      koBtnB.addEventListener('click', ()=> applyKnockout('B'));
+      teamBControls.appendChild(koBtnB);
+      // Undo for Team B
+      createUndoButton('B', teamBControls);
+      break;
+
+    case 'carrom_single':
+    case 'carrom_double':
+      createScoreButton('+1 Coin', 'A', 1, teamAControls);
+      createScoreButton('+3 Queen', 'A', 3, teamAControls);
+      createUndoButton('A', teamAControls);
+
+      createScoreButton('+1 Coin', 'B', 1, teamBControls);
+      createScoreButton('+3 Queen', 'B', 3, teamBControls);
+      createUndoButton('B', teamBControls);
+      break;
+
+    default:
+      // Generic controls
+      createScoreButton('+1', 'A', 1, teamAControls);
+      createScoreButton('-1', 'A', -1, teamAControls);
+      createUndoButton('A', teamAControls);
+      
+      createScoreButton('+1', 'B', 1, teamBControls);
+      createScoreButton('-1', 'B', -1, teamBControls);
+      createUndoButton('B', teamBControls);
+      break;
+  }
+
+  // === END MODIFICATION ===
+
+  // Initialize winner/loser header (if finished)
+  renderWinnerLoserHeader(m);
+  // Initialize volleyball set UI (if applicable)
+  renderVolleyballSets(m);
+  
+  document.getElementById('scoreSheet').classList.add('show');
+}
+
+function updateScoreSheetLive(m){
+  document.getElementById('teamAScore').innerText = m.scoreA||0;
+  document.getElementById('teamBScore').innerText = m.scoreB||0;
+  document.getElementById('scoreCenter').innerText = `${(m.scoreA||0)} - ${(m.scoreB||0)}`;
+  document.getElementById('eventLog').innerHTML = (m.events || []).map(ev=>`<div>${ev}</div>`).join('');
+  document.getElementById('statusLabel').innerText = (m.status||'').toUpperCase();
+  renderWinnerLoserHeader(m);
+  // For volleyball, also refresh set summary UI
+  if(m.sport === 'volleyball'){
+    renderVolleyballSets(m);
+  } else {
+    const area = document.getElementById('volleyballSetsArea');
+    if(area) area.style.display = 'none';
+  }
+}
+
+// Show winner/loser line in the score sheet header for finished matches
+function renderWinnerLoserHeader(match){
+  const el = document.getElementById('winnerLoserHeader');
+  if(!el || !match) return;
+
+  if(match.status !== 'finished'){
+    el.innerHTML = '';
+    return;
+  }
+
+  // Walkout / Bye overrides everything (all sports)
+  if(match.walkType === 'both_walkout'){
+    el.innerHTML = `<span class=\"muted\">Match tied (both teams walkout)</span>`;
+    return;
+  }
+
+  if(match.walkWin){
+    const winnerTeam = match.walkWin === 'A' ? match.teamA : match.teamB;
+    const loserName  = (match.walkType === 'bye') ? 'BYE' : (match.walkWin === 'A' ? match.teamB : match.teamA);
+    const method = match.walkType === 'bye' ? 'by Bye' : 'by Walkout';
+    el.innerHTML = `<span class=\"winner\">Winner: ${winnerTeam} (${method})</span>
+                    &nbsp;&nbsp;
+                    <span class=\"loser\">Loser: ${loserName}</span>`;
+    return;
+  }
+
+  // Taekwondo KO overrides everything (when no walkover recorded)
+  if(match.sport === 'taekwondo' && match.koWinner){
+    const winnerTeam = match.koWinner === 'A' ? match.teamA : match.teamB;
+    const loserTeam  = match.koWinner === 'A' ? match.teamB : match.teamA;
+    el.innerHTML = `<span class=\"winner\">Winner: ${winnerTeam} (by KO)</span>
+                    &nbsp;&nbsp;
+                    <span class=\"loser\">Loser: ${loserTeam}</span>`;
+    return;
+  }
+
+  // Special handling for volleyball: use sets won if available
+  if(match.sport === 'volleyball'){
+    const sets = match.volleyballSets || [];
+    if(sets.length > 0){
+      let setsAWon = 0, setsBWon = 0;
+
+      // Count completed sets
+      sets.forEach(s=>{
+        const a = s.scoreA || 0;
+        const b = s.scoreB || 0;
+        if(a > b) setsAWon++;
+        else if(b > a) setsBWon++;
+      });
+
+      if(setsAWon > setsBWon){
+        el.innerHTML = `<span class="winner">Winner: ${match.teamA} (${setsAWon}-${setsBWon} sets)</span>
+                        &nbsp;&nbsp;
+                        <span class="loser">Loser: ${match.teamB}</span>`;
+      } else if(setsBWon > setsAWon){
+        el.innerHTML = `<span class="winner">Winner: ${match.teamB} (${setsBWon}-${setsAWon} sets)</span>
+                        &nbsp;&nbsp;
+                        <span class="loser">Loser: ${match.teamA}</span>`;
+      } else {
+        // Fallback: tied in sets, show as tied
+        el.innerHTML = `<span class="muted">Match tied (${setsAWon}-${setsBWon} sets)</span>`;
+      }
+      return;
+    }
+    // If no sets data, fall through and use point totals
+  }
+
+  // Default (non-volleyball): use total score (include points)
+  const scoreA = match.scoreA || 0;
+  const scoreB = match.scoreB || 0;
+
+  if(scoreA > scoreB){
+    el.innerHTML = `<span class=\"winner\">Winner: ${match.teamA} (${scoreA}-${scoreB})</span>
+                    &nbsp;&nbsp;
+                    <span class=\"loser\">Loser: ${match.teamB}</span>`;
+  } else if(scoreB > scoreA){
+    el.innerHTML = `<span class=\"winner\">Winner: ${match.teamB} (${scoreB}-${scoreA})</span>
+                    &nbsp;&nbsp;
+                    <span class=\"loser\">Loser: ${match.teamA}</span>`;
+  } else {
+    el.innerHTML = `<span class=\"muted\">Match tied (${scoreA}-${scoreB})</span>`;
+  }
+}
+
+// Render per-set summary for volleyball matches
+function renderVolleyballSets(match){
+  const area = document.getElementById('volleyballSetsArea');
+  const list = document.getElementById('volleyballSetsList');
+  const label = document.getElementById('currentSetLabel');
+  const btn = document.getElementById('btnNextSet');
+  if(!area || !list || !label || !btn) return;
+
+  if(match.sport !== 'volleyball'){
+    area.style.display = 'none';
+    return;
+  }
+
+  area.style.display = 'block';
+  const sets = match.volleyballSets || [];
+
+  if(sets.length === 0){
+    list.innerHTML = '<div class="muted">No completed sets yet</div>';
+  } else {
+    list.innerHTML = sets.map(s=>`<div>Set ${s.set}: ${s.scoreA} - ${s.scoreB}</div>`).join('');
+  }
+
+  const currentSetNumber = match.currentSetNumber || (sets.length + 1);
+  label.innerText = `Current set: ${currentSetNumber}`;
+}
+
+// Move to the next set for volleyball without ending the match
+function advanceVolleyballSet(){
+  if(!activeMatchId) return;
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  ref.transaction(match=>{
+    if(!match || match.sport !== 'volleyball') return match;
+
+    const sets = match.volleyballSets || [];
+    const currentSetNumber = match.currentSetNumber || (sets.length + 1);
+    const scoreA = match.scoreA || 0;
+    const scoreB = match.scoreB || 0;
+
+    // Save the just-finished set
+    sets.push({ set: currentSetNumber, scoreA, scoreB });
+    match.volleyballSets = sets;
+    match.currentSetNumber = currentSetNumber + 1;
+    
+    match.events = match.events || [];
+    match.events.unshift(`${(new Date()).toLocaleTimeString()} — End of set ${currentSetNumber}: ${scoreA} - ${scoreB}`);
+
+    // Reset scores for the new set
+    match.scoreA = 0;
+    match.scoreB = 0;
+    match.updatedAt = Date.now();
+    return match;
+  }, function(err, committed, snapshot){
+    if(err){ console.error('advanceVolleyballSet failed', err); return; }
+    if(committed && snapshot.val() && activeMatchId === snapshot.key){
+      updateScoreSheetLive(snapshot.val());
+    }
+  });
+}
+
+// Wire the Next Set button once
+const btnNextSetEl = document.getElementById('btnNextSet');
+if(btnNextSetEl) btnNextSetEl.addEventListener('click', advanceVolleyballSet);
+
+// Timer & quarter controls wiring
+const durationSelectEl = document.getElementById('matchDuration');
+const timerStartBtn = document.getElementById('timerStart');
+const timerPauseBtn = document.getElementById('timerPause');
+const timerResetBtn = document.getElementById('timerReset');
+const quarterSelectEl = document.getElementById('quarterSelect');
+const manualMinutesEl = document.getElementById('matchDurationManual');
+const walkOutcomeSelectEl = document.getElementById('walkOutcomeSelect');
+
+if(durationSelectEl){
+  durationSelectEl.addEventListener('change', ()=>{
+    resetMatchTimerFromDropdown();
+  });
+}
+if(timerStartBtn){
+  timerStartBtn.addEventListener('click', startMatchTimer);
+}
+if(timerPauseBtn){
+  timerPauseBtn.addEventListener('click', pauseMatchTimer);
+}
+if(timerResetBtn){
+  timerResetBtn.addEventListener('click', resetMatchTimerFromDropdown);
+}
+if(manualMinutesEl){
+  manualMinutesEl.addEventListener('input', resetMatchTimerFromDropdown);
+}
+if(quarterSelectEl){
+  quarterSelectEl.addEventListener('change', ()=>{
+    // Optional: could push a small event into the log here later
+  });
+}
+
+// Walkouts & byes dropdown handler
+if(walkOutcomeSelectEl){
+  walkOutcomeSelectEl.addEventListener('change', async ()=>{
+    const val = walkOutcomeSelectEl.value || '';
+    if(!val) return;
+
+    let message = '';
+    if(val === 'A_no_show') message = 'Confirm: Team A did not show up, Team B wins by walkout?';
+    if(val === 'B_no_show') message = 'Confirm: Team B did not show up, Team A wins by walkout?';
+    if(val === 'both_walkout') message = 'Confirm: both teams walked out, match tied?';
+    if(val === 'bye_A') message = 'Confirm: Bye for Team A (wins), Team B marked as BYE?';
+    if(val === 'bye_B') message = 'Confirm: Bye for Team B (wins), Team A marked as BYE?';
+
+    const ok = await showConfirm(message || 'Apply this outcome?');
+    if(!ok){ walkOutcomeSelectEl.value = ''; return; }
+
+    if(val === 'A_no_show') applyWalkover('B','walkout');
+    else if(val === 'B_no_show') applyWalkover('A','walkout');
+    else if(val === 'both_walkout') applyWalkover('A','both_walkout');
+    else if(val === 'bye_A') applyWalkover('A','bye');
+    else if(val === 'bye_B') applyWalkover('B','bye');
+
+    walkOutcomeSelectEl.value = '';
+  });
+}
+
+// Collapsible event log in score sheet
+const eventLogWrapperEl = document.getElementById('eventLogWrapper');
+const toggleEventLogBtn = document.getElementById('toggleEventLog');
+if(eventLogWrapperEl && toggleEventLogBtn){
+  toggleEventLogBtn.addEventListener('click', ()=>{
+    const isHidden = !eventLogWrapperEl.style.display || eventLogWrapperEl.style.display === 'none';
+    eventLogWrapperEl.style.display = isHidden ? 'block' : 'none';
+    toggleEventLogBtn.textContent = isHidden ? 'Hide events' : 'Show events';
+  });
+}
+
+// Generic walkover / bye handler (all sports)
+// side: 'A' or 'B'; type: 'walkout' | 'bye' | 'both_walkout'
+function applyWalkover(side, type){
+  if(!activeMatchId) return;
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  ref.transaction(match=>{
+    if(!match) return match;
+    // We allow changing the outcome later, so always overwrite existing walkout/bye state
+    const now = Date.now();
+
+    // Both teams walkout (tie)
+    if(type === 'both_walkout'){
+      match.walkWin = null;
+      match.walkType = 'both_walkout';
+      match.status = 'finished';
+      match.finishedAt = now;
+      match.updatedAt = now;
+      match.events = match.events || [];
+      match.events.unshift(`${(new Date()).toLocaleTimeString()} — Both teams walkout (tied)`);
+      return match;
+    }
+
+    match.walkWin = side;           // 'A' or 'B'
+    match.walkType = type || 'walkout'; // 'walkout' | 'bye'
+    match.status = 'finished';
+    match.finishedAt = now;
+    match.updatedAt = now;
+
+    const winnerTeam = side === 'A' ? (match.teamA || 'Team A') : (match.teamB || 'Team B');
+    const loserTeam  = side === 'A' ? (match.teamB || 'Team B') : (match.teamA || 'Team A');
+    const teamLabel  = side === 'A' ? 'Team A' : 'Team B';
+    const methodLabel = type === 'bye' ? 'Bye win' : 'Walkout win';
+
+    match.events = match.events || [];
+    match.events.unshift(`${(new Date()).toLocaleTimeString()} — ${teamLabel} ${methodLabel}: ${winnerTeam} vs ${loserTeam}`);
+    return match;
+  }, function(err, committed, snapshot){
+    if(err){ console.error('applyWalkover failed', err); return; }
+    if(committed && snapshot.val() && activeMatchId === snapshot.key){
+      updateScoreSheetLive(snapshot.val());
+    }
+  });
+}
+
+// (per-team walkout buttons removed; using dropdown instead)
+
+// Taekwondo KO handler
+function applyKnockout(side){
+  if(!activeMatchId) return;
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  ref.transaction(match=>{
+    if(!match) return match;
+    if(match.sport !== 'taekwondo') return match;
+    // Do not override if KO already recorded
+    if(match.koWinner) return match;
+
+    match.koWinner = side;
+    match.status = 'finished';
+    const now = Date.now();
+    match.finishedAt = now;
+    match.updatedAt = now;
+
+    const winnerTeam = side === 'A' ? (match.teamA || 'Team A') : (match.teamB || 'Team B');
+    match.events = match.events || [];
+    // include Team A/Team B so undoLast can find it
+    const sideLabel = side === 'A' ? 'Team A' : 'Team B';
+    match.events.unshift(`${(new Date()).toLocaleTimeString()} — ${sideLabel} Knockout: ${winnerTeam}`);
+    return match;
+  }, function(err, committed, snapshot){
+    if(err){ console.error('applyKnockout failed', err); return; }
+    if(committed && snapshot.val() && activeMatchId === snapshot.key){
+      updateScoreSheetLive(snapshot.val());
+    }
+  });
+}
+
+document.getElementById('closeScore').addEventListener('click', ()=> {
+  document.getElementById('scoreSheet').classList.remove('show');
+  activeMatchId = null;
+});
+
+function pushEventToMatch(matchId, text){
+  const t = `${(new Date()).toLocaleTimeString()} — ${text}`;
+  rtdb.ref(`matches/${matchId}`).transaction(match=>{
+    if(!match) return match;
+    match.events = match.events || [];
+    match.events.unshift(t);
+    match.updatedAt = Date.now();
+    return match;
+  });
+  return t;
+}
+
+// === MODIFIED: Added eventLabel parameter ===
+function applyScore(side, delta, eventLabel){
+  if(!activeMatchId) return;
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  ref.transaction(match=>{
+    if(!match) return match;
+
+    // Update score
+    if(side==='A'){ match.scoreA = Math.max(0, (match.scoreA||0) + delta); }
+    else { match.scoreB = Math.max(0, (match.scoreB||0) + delta); }
+    
+    // Track non-point stats like fouls/penalties separately per side
+    if(eventLabel){
+      const labelLower = eventLabel.toLowerCase();
+      match.stats = match.stats || {};
+      const isSideA = (side === 'A');
+      // Generic foul counter
+      if(labelLower.includes('foul')){
+        const key = isSideA ? 'foulsA' : 'foulsB';
+        match.stats[key] = (match.stats[key] || 0) + 1;
+      }
+      // Generic penalty counter
+      if(labelLower.includes('penalty')){
+        const key = isSideA ? 'penaltiesA' : 'penaltiesB';
+        match.stats[key] = (match.stats[key] || 0) + 1;
+      }
+    }
+
+    // --- MODIFIED: Use eventLabel for log ---
+    let txt = '';
+    const teamName = side==='A' ? 'Team A' : 'Team B';
+    if(eventLabel){
+      // Use the custom label (e.g., "+3 (3PT)")
+      txt = `${teamName} ${eventLabel}`;
+    } else {
+      // Fallback for generic
+      txt = `${teamName} ${delta>0?'+':'-'}${Math.abs(delta)}`;
+    }
+    // --- END MOD ---
+
+    match.events = match.events || [];
+    match.events.unshift(`${(new Date()).toLocaleTimeString()}  ${txt}`);
+    match.updatedAt = Date.now();
+    return match;
+  }, function(err, committed, snapshot){
+    if(err){ console.error('Transaction failed', err); return; }
+    if(committed){
+      const m = snapshot.val();
+      if(activeMatchId === snapshot.key){
+        updateScoreSheetLive(m);
+      }
+    }
+  });
+}
+
+// === MODIFIED: Removed static button listeners ===
+// document.getElementById('incA').addEventListener('click', ()=> applyScore('A', 1));
+// document.getElementById('decA').addEventListener('click', ()=> applyScore('A', -1));
+// document.getElementById('incB').addEventListener('click', ()=> applyScore('B', 1));
+// document.getElementById('decB').addEventListener('click', ()=> applyScore('B', -1));
+// document.getElementById('undoA').addEventListener('click', ()=> undoLast('A'));
+// document.getElementById('undoB').addEventListener('click', ()=> undoLast('B'));
+
+function undoLast(side){
+  if(!activeMatchId) return;
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  ref.transaction(match=>{
+    if(!match || !match.events || match.events.length===0) return match;
+    let idx = -1;
+    for(let i=0;i<match.events.length;i++){
+      const ev = match.events[i];
+      if(side==='A' && ev.includes('Team A')){ idx=i; break; }
+      if(side==='B' && ev.includes('Team B')){ idx=i; break; }
+    }
+    if(idx===-1) return match;
+    const ev = match.events.splice(idx,1)[0];
+
+    // Special case: undo walkout / bye
+    if(ev.includes('Walkout win') || ev.includes('Bye win') || ev.includes('Both teams walkout')){
+      match.walkWin = null;
+      match.walkType = null;
+      match.status = 'live';
+      match.finishedAt = null;
+      match.events.unshift(`${(new Date()).toLocaleTimeString()} — UNDO WALKOVER ${side}`);
+      match.updatedAt = Date.now();
+      return match;
+    }
+
+    // Special case: undo taekwondo KO
+    if(match.sport === 'taekwondo' && ev.includes('Knockout')){
+      // Clear KO winner and revert to live (scores unchanged)
+      match.koWinner = null;
+      match.status = 'live';
+      match.finishedAt = null;
+      match.events.unshift(`${(new Date()).toLocaleTimeString()} — UNDO KO ${side}`);
+      match.updatedAt = Date.now();
+      return match;
+    }
+    
+    // Try to find score from label like (+X) or +X
+    const m = ev.match(/\([+-]?(\d+)\)/) || ev.match(/[+-](\d+)/);
+    let delta = 0;
+    if(m){ 
+      delta = parseInt(m[1],10); 
+      if(ev.includes('-')) delta = -delta; 
+    }
+    
+    if(side==='A'){ match.scoreA = Math.max(0, (match.scoreA||0) - delta); }
+    else { match.scoreB = Math.max(0, (match.scoreB||0) - delta); }
+    match.events.unshift(`${(new Date()).toLocaleTimeString()} — UNDO ${side}`);
+    match.updatedAt = Date.now();
+    return match;
+  }, function(err, committed, snapshot){
+    if(err) console.error('Undo failed', err);
+    if(committed && snapshot.val() && activeMatchId === snapshot.key) updateScoreSheetLive(snapshot.val());
+  });
+}
+
+document.getElementById('finishMatch').addEventListener('click', async ()=>{
+  if(!activeMatchId) return;
+  const ok = await showConfirm('Mark match as finished?');
+  if(!ok) return;
+
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  const now = Date.now();
+
+  ref.transaction(match=>{
+    if(!match) return match;
+
+    // For volleyball, make sure the final set is recorded in volleyballSets
+    if(match.sport === 'volleyball'){
+      const sets = match.volleyballSets || [];
+      const scoreA = match.scoreA || 0;
+      const scoreB = match.scoreB || 0;
+      const currentSetNumber = match.currentSetNumber || (sets.length + 1);
+
+      // Only push if there is a non-zero score and we haven't just started a fresh set
+      if(scoreA > 0 || scoreB > 0){
+        sets.push({ set: currentSetNumber, scoreA, scoreB });
+        match.volleyballSets = sets;
+        match.events = match.events || [];
+        match.events.unshift(`${(new Date()).toLocaleTimeString()} — End of set ${currentSetNumber}: ${scoreA} - ${scoreB}`);
+      }
+    }
+
+    match.status = 'finished';
+    match.finishedAt = now;
+    match.updatedAt = now;
+    return match;
+  }, function(err, committed, snapshot){
+    if(err){ console.error('finishMatch transaction failed', err); return; }
+    if(committed){
+      document.getElementById('statusLabel').innerText = 'FINISHED';
+      document.getElementById('scoreSheet').classList.remove('show');
+      activeMatchId = null;
+    }
+  });
+});
+
+document.getElementById('resetMatch').addEventListener('click', async ()=>{
+  if(!activeMatchId) return;
+  const ok = await showConfirm('Reset scores to 0 and clear events?');
+  if(!ok) return;
+
+  const ref = rtdb.ref(`matches/${activeMatchId}`);
+  await ref.transaction(match=>{
+    if(!match) return match;
+    match.scoreA = 0;
+    match.scoreB = 0;
+    match.events = [];
+    // Clear any taekwondo KO outcome
+    if(match.sport === 'taekwondo'){
+      match.koWinner = null;
+    }
+    // Clear any walkout / bye / both-walkout outcome
+    match.walkWin = null;
+    match.walkType = null;
+    match.status = 'live';
+    match.finishedAt = null;
+    match.updatedAt = Date.now();
+    return match;
+  });
+
+  // Update local UI to reflect reset state
+  document.getElementById('teamAScore').innerText='0';
+  document.getElementById('teamBScore').innerText='0';
+  document.getElementById('eventLog').innerHTML='';
+  const statusEl = document.getElementById('statusLabel');
+  if(statusEl) statusEl.innerText = 'LIVE';
+  const winnerHeaderEl = document.getElementById('winnerLoserHeader');
+  if(winnerHeaderEl) winnerHeaderEl.innerHTML = '';
+
+  pushEventToMatch(activeMatchId, 'Match reset');
+});
+
+/* filters */
+window.matchesViewFilter = 'all';
+const filterAllBtn = document.getElementById('filterAll');
+const filterLiveBtn = document.getElementById('filterLive');
+const filterFinishedBtn = document.getElementById('filterFinished');
+const filterWrongBtn = document.getElementById('filterWrong');
+
+function setMatchesFilter(mode){
+  window.matchesViewFilter = mode;
+  // Update visual state
+  [filterAllBtn, filterLiveBtn, filterFinishedBtn, filterWrongBtn].forEach(btn=>{
+    if(btn) btn.classList.remove('match-filter-active');
+  });
+  if(mode === 'all' && filterAllBtn) filterAllBtn.classList.add('match-filter-active');
+  if(mode === 'live' && filterLiveBtn) filterLiveBtn.classList.add('match-filter-active');
+  if(mode === 'finished' && filterFinishedBtn) filterFinishedBtn.classList.add('match-filter-active');
+  if(mode === 'wrong' && filterWrongBtn) filterWrongBtn.classList.add('match-filter-active');
+  renderMatchesList(lastMatchSnapshot);
+}
+
+if(filterAllBtn) filterAllBtn.addEventListener('click', ()=> setMatchesFilter('all'));
+if(filterLiveBtn) filterLiveBtn.addEventListener('click', ()=> setMatchesFilter('live'));
+if(filterFinishedBtn) filterFinishedBtn.addEventListener('click', ()=> setMatchesFilter('finished'));
+if(filterWrongBtn) filterWrongBtn.addEventListener('click', ()=> setMatchesFilter('wrong'));
+
+// Initialize default state
+setMatchesFilter('all');
+document.getElementById('searchMatches').addEventListener('input', ()=> renderMatchesList(lastMatchSnapshot));
+['filterSportScoring','filterAgeScoring','filterDayScoring','filterTimeScoring','filterSportMatches','filterAgeMatches','filterDayMatches','filterTimeMatches','filterSportLive','filterAgeLive','filterDayLive','filterTimeLive'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('change', ()=> { renderScoringList(lastMatchSnapshot); renderMatchesList(lastMatchSnapshot); renderLiveList(lastMatchSnapshot); });
+});
+
+/* Minimal start scoring button handlers */
+document.getElementById('btnStartScoring').addEventListener('click', ()=> document.getElementById('startModal').classList.add('show'));
+document.getElementById('startCancel').addEventListener('click', ()=> document.getElementById('startModal').classList.remove('show'));
+document.getElementById('startCreate').addEventListener('click', async ()=>{
+  const sport = (document.getElementById('mSport')||{value:''}).value;
+  const age = (document.getElementById('mAge')||{value:''}).value;
+  const teamA = ((document.getElementById('mTeamA')||{value:''}).value||'Team A').trim();
+  const teamB = ((document.getElementById('mTeamB')||{value:''}).value||'Team B').trim();
+  const referee = (getSessionEmail() || '').trim();
+  if(!sport || !age || !teamA || !teamB){ alert('Fill all fields'); return; }
+  const matchRef = rtdb.ref('matches').push();
+  const matchId = matchRef.key;
+  const now = Date.now();
+  const createdDateIST = getISTDateKeyFromMs(now);
+  const doc = {
+    sport, age, teamA, teamB,
+    referee: referee || null,
+    scoreA:0, scoreB:0, status:'live', events:[], createdAt: now, startedAt: now, finishedAt: null, updatedAt: now,
+    createdDateIST
+  };
+
+  // Initialize volleyball-specific fields so we can track multiple sets
+  if(sport === 'volleyball'){
+    doc.volleyballSets = [];
+    doc.currentSetNumber = 1;
+  }
+
+  try{
+    await matchRef.set(doc);
+    document.getElementById('startModal').classList.remove('show');
+    openScoreSheet(matchId);
+  }catch(e){ alert('Failed to create match: '+e.message); }
+});
+
+/* =========================
+   Quick helpers on load
+*/
+(function init(){
+  // simple default UI
+  setTimeout(()=>{ if(!auth.currentUser && !localStorage.getItem('go_currentEmail')) authOverlay.style.display='flex'; }, 600);
+})();
+</script>
+</body>
+</html>
